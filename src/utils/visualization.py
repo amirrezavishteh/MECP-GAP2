@@ -359,7 +359,8 @@ def visualize_comparison(
 
 def compute_partition_metrics(
     W_matrix: np.ndarray,
-    assignments: np.ndarray
+    assignments: np.ndarray,
+    num_partitions: int = None
 ) -> Dict[str, float]:
     """
     Compute quantitative metrics for partition quality.
@@ -367,6 +368,7 @@ def compute_partition_metrics(
     Args:
         W_matrix: Mobility weight matrix (N, N)
         assignments: Partition assignments (N,)
+        num_partitions: Number of intended partitions (if None, inferred from assignments)
         
     Returns:
         Dictionary with metrics:
@@ -377,7 +379,8 @@ def compute_partition_metrics(
         - num_cut_edges: Number of edges cut
     """
     num_nodes = len(assignments)
-    num_partitions = len(np.unique(assignments))
+    if num_partitions is None:
+        num_partitions = len(np.unique(assignments))
     
     # Edge cut calculation
     rows, cols = np.nonzero(W_matrix)
@@ -412,7 +415,8 @@ def compute_partition_metrics(
 def print_partition_report(
     W_matrix: np.ndarray,
     assignments: np.ndarray,
-    method_name: str = "MECP-GAP"
+    method_name: str = "MECP-GAP",
+    num_partitions: int = None
 ):
     """
     Print a formatted report of partition quality metrics.
@@ -421,8 +425,9 @@ def print_partition_report(
         W_matrix: Mobility weight matrix
         assignments: Partition assignments
         method_name: Name of the method for display
+        num_partitions: Number of intended partitions
     """
-    metrics = compute_partition_metrics(W_matrix, assignments)
+    metrics = compute_partition_metrics(W_matrix, assignments, num_partitions=num_partitions)
     
     print(f"\n{'='*50}")
     print(f"Partition Quality Report: {method_name}")

@@ -24,13 +24,14 @@ from models.loss_functions import MECP_Loss
 def prepare_tensors(
     coords: np.ndarray,
     W: np.ndarray,
-    device: str = 'cpu'
+    device: str = 'cpu',
+    feature_type: str = 'weight_row'
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Convert numpy arrays to PyTorch tensors and build graph structure.
     
     This function prepares:
-    1. Node features (coordinates)
+    1. Node features (weight-row connectivity or coordinates)
     2. Edge index (sparse adjacency)
     3. Edge weights (mobility traffic)
     4. Weight matrix (for loss computation)
@@ -39,9 +40,10 @@ def prepare_tensors(
         coords: Node coordinates of shape (N, 2)
         W: Mobility weight matrix of shape (N, N)
         device: Target device ('cpu' or 'cuda')
+        feature_type: 'weight_row' (paper default, dim=N) or 'coords' (dim=2)
         
     Returns:
-        features: Node features tensor (N, 2)
+        features: Node features tensor (N, feat_dim)
         edge_index: Edge indices tensor (2, E)
         edge_weights: Edge weights tensor (E,)
         W_tensor: Weight matrix tensor (N, N)
@@ -49,7 +51,12 @@ def prepare_tensors(
     num_nodes = len(coords)
     
     # Convert to tensors
-    features = torch.tensor(coords, dtype=torch.float32, device=device)
+    if feature_type == 'weight_row':
+        row_sums = W.sum(axis=1, keepdims=True) + 1e-8
+        features_np = W / row_sums
+        features = torch.tensor(features_np, dtype=torch.float32, device=device)
+    else:
+        features = torch.tensor(coords, dtype=torch.float32, device=device)
     W_tensor = torch.tensor(W, dtype=torch.float32, device=device)
     
     # Build edge index from non-zero weights
@@ -124,9 +131,9 @@ def train_model(
     features, edge_index, edge_weights, W_tensor = prepare_tensors(coords, W, device)
     
     # --- B. Initialize Model ---
-    # Input: 2 (x,y coords) -> Hidden: 128 -> Output: 128 -> Partitions: P
+    in_feats = features.shape[1]  # Auto-detect from features
     model = MECP_GAP_Model(
-        in_feats=2,
+        in_feats=in_feats,
         hidden_feats=hidden_feats,
         out_feats=hidden_feats,
         num_partitions=num_partitions,
@@ -137,8 +144,8 @@ def train_model(
     # Optimizer (Adam is standard for GNNs)
     optimizer = optim.Adam(model.parameters(), lr=lr)
     
-    # Loss Function (Parameters from paper: Alpha=0.001, Beta=1)
-    criterion = MECP_Loss(alpha=alpha, beta=beta)
+    # Loss Function (Parameters from paper Eq.9: Alpha=1/1000, Beta=1, no normalization)
+    criterion = MECP_Loss(alpha=alpha, beta=beta, normalize_cut=False)
     
     # --- C. Training Loop ---
     if verbose:
@@ -222,8 +229,9 @@ def train_model_with_history(
     num_nodes = len(coords)
     features, edge_index, edge_weights, W_tensor = prepare_tensors(coords, W, device)
     
+    in_feats = features.shape[1]
     model = MECP_GAP_Model(
-        in_feats=2,
+        in_feats=in_feats,
         hidden_feats=hidden_feats,
         out_feats=hidden_feats,
         num_partitions=num_partitions,
@@ -232,7 +240,7 @@ def train_model_with_history(
     ).to(device)
     
     optimizer = optim.Adam(model.parameters(), lr=lr)
-    criterion = MECP_Loss(alpha=alpha, beta=beta)
+    criterion = MECP_Loss(alpha=alpha, beta=beta, normalize_cut=False)
     
     history = []
     

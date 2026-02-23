@@ -130,6 +130,9 @@ def main():
                             help='Hidden layer dimension')
     model_group.add_argument('--num_layers', type=int, default=2,
                             help='Number of GNN layers')
+    model_group.add_argument('--feature_type', type=str, default='weight_row',
+                            choices=['weight_row', 'coords'],
+                            help='Node feature type: weight_row (paper, dim=N) or coords (dim=2)')
     
     # Training arguments
     train_group = parser.add_argument_group('Training')
@@ -137,12 +140,12 @@ def main():
                             help='Number of training epochs')
     train_group.add_argument('--learning_rate', type=float, default=0.01,
                             help='Learning rate')
-    train_group.add_argument('--alpha', type=float, default=0.001,
-                            help='Weight for edge cut loss')
+    train_group.add_argument('--alpha', type=float, default=-1.0,
+                            help='Weight for edge cut loss (-1 = auto-compute per paper)')
     train_group.add_argument('--beta', type=float, default=1.0,
                             help='Weight for balance loss')
-    train_group.add_argument('--gamma', type=float, default=-0.1,
-                            help='Weight for entropy regularization (negative = confident predictions)')
+    train_group.add_argument('--gamma', type=float, default=0.0,
+                            help='Weight for entropy regularization (0 = disabled; -0.1 = confident predictions)')
     
     # Output arguments
     output_group = parser.add_argument_group('Output')
@@ -183,7 +186,7 @@ def main():
     print("\n[Step 2] Training Model...")
     
     config = TrainingConfig(
-        in_feats=2,
+        in_feats=-1,  # Auto-detect from data (N for weight_row features)
         hidden_feats=args.hidden_feats,
         num_partitions=args.num_partitions,
         num_layers=args.num_layers,
@@ -192,6 +195,7 @@ def main():
         alpha=args.alpha,
         beta=args.beta,
         gamma=args.gamma,
+        feature_type=getattr(args, 'feature_type', 'weight_row'),
         log_interval=50,
         checkpoint_dir=f"{args.save_dir}/checkpoints" if args.save_plots else None
     )
@@ -203,7 +207,7 @@ def main():
     print("\n[Step 3] Evaluating Results...")
     
     final_assignments = results['final_assignments']
-    print_partition_report(W_matrix, final_assignments, "MECP-GAP")
+    print_partition_report(W_matrix, final_assignments, "MECP-GAP", num_partitions=args.num_partitions)
     
     # Step 4: Visualize
     if not args.no_visualize:

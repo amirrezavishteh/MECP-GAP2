@@ -1,0 +1,106 @@
+{
+  "config": {
+    "num_nodes": 30,
+    "num_partitions": 4,
+    "area_size": 10.0,
+    "seed": 42
+  },
+  "results": [
+    {
+      "method_name": "MECP-GAP",
+      "edge_cut": 20002.677554382186,
+      "edge_cut_ratio": 0.15929455778719426,
+      "load_balance_var": 173.0,
+      "balance_ratio": 15.0,
+      "normalized_cut": 1.0903711066269257,
+      "modularity": 0.2116236420261672,
+      "partition_sizes": [
+        15,
+        2,
+        0,
+        13
+      ],
+      "runtime": 0.9040911197662354
+    },
+    {
+      "method_name": "MECP-GAP (SSC)",
+      "edge_cut": 9962.203139179255,
+      "edge_cut_ratio": 0.07933561591078564,
+      "load_balance_var": 225.0,
+      "balance_ratio": 15.0,
+      "normalized_cut": 0.16062722976448823,
+      "modularity": 0.20728787953018338,
+      "partition_sizes": [
+        0,
+        15,
+        0,
+        15
+      ],
+      "runtime": 0.7439947128295898
+    },
+    {
+      "method_name": "METIS",
+      "edge_cut": 14918.23581931953,
+      "edge_cut_ratio": 0.1188037837105946,
+      "load_balance_var": 75.0,
+      "balance_ratio": 13.0,
+      "normalized_cut": 1.5039853348229029,
+      "modularity": 0.467717518271829,
+      "partition_sizes": [
+        13,
+        9,
+        1,
+        7
+      ],
+      "runtime": 0.9259977340698242
+    },
+    {
+      "method_name": "Greedy (KGGGP)",
+      "edge_cut": 27383.620362104935,
+      "edge_cut_ratio": 0.21807388957476215,
+      "load_balance_var": 1.0,
+      "balance_ratio": 1.1428571428571428,
+      "normalized_cut": 1.0909251274373446,
+      "modularity": 0.4837559902778879,
+      "partition_sizes": [
+        8,
+        8,
+        7,
+        7
+      ],
+      "runtime": 0.0029973983764648438
+    },
+    {
+      "method_name": "PBPA (DRL)",
+      "edge_cut": 51281.09501729584,
+      "edge_cut_ratio": 0.40838529398948453,
+      "load_balance_var": 51.0,
+      "balance_ratio": 4.333333333333333,
+      "normalized_cut": 2.2287522889252633,
+      "modularity": 0.22886316751759375,
+      "partition_sizes": [
+        7,
+        13,
+        7,
+        3
+      ],
+      "runtime": 2.804002523422241
+    },
+    {
+      "method_name": "Random (Best of 10)",
+      "edge_cut": 64075.93158852173,
+      "edge_cut_ratio": 0.5102790443652352,
+      "load_balance_var": 1.0,
+      "balance_ratio": 1.1428571428571428,
+      "normalized_cut": 2.4311532460963434,
+      "modularity": 0.20997816295857985,
+      "partition_sizes": [
+        8,
+        8,
+        7,
+        7
+      ],
+      "runtime": 0.0010039806365966797
+    }
+  ]
+}

@@ -1,0 +1,1025 @@
+﻿--- PAGE 1 ---
+IEEE TRANSACTIONS ON NETWORK AND SERVICE MANAGEMENT, VOL. 21, NO. 4, AUGUST 2024 4383
+Mobility-Aware MEC Planning With a GNN-Based
+Graph Partitioning Framework
+Jiayi Liu ,Member, IEEE , Zhongyi Xu, Chen Wang, Xuefang Liu, Xuemei Xie ,Senior Member, IEEE ,
+and Guangming Shi ,Fellow, IEEE
+Abstract ΓÇöMobile service continuity is essential important
+to ensure that user sessions and services will survive usermobility. The 5G enhances its mobility management by providingthe ∩¼éexibility and offering three types of Session and ServiceContinuity (SSC) modes to address various service continuityrequirements. Multi-access edge computing (MEC) is a typeof widely adopted network architecture that delivers networkservices from the boundary of the mobile network by provisioninga set of edge servers. Determining an optimum planning ofMEC edge servers, which involves determining edge serversappropriate geographical positions and their serving areas, is aprecondition for more ef∩¼ücient service provisioning and better
+usage of network resources. In this work, we investigate the
+MEC servers planning problem by considering the managementcost for maintaining MEC service continuity. The problem isformulated as a graph partitioning problem to partition the RANgraph with minimum SSC management costs and balanced MECservers workloads. Then, we adapt a generalizable approximateGraph Partitioning framework which leverages on Graph NeuralNetwork (GNN) to embed the RAN network spacial featureand on Multilayer Perceptron (MLP) for graph partitioning.Based on the framework, we propose a MEC server planningalgorithm named MECP-GAP. Finally, we evaluate MECP-GAPwith extensive simulations and real network data. Comparing toseveral baselines, MECP-GAP achieves better performance withlower running time.
+Index Terms ΓÇöMobile edge computing, edge server planning,
+mobility management, graph neural network, learning-basedframework.
+I. I NTRODUCTION
+AMOBILE network is a complex wireless communication
+system that provides seamless connectivity and ef∩¼ücient
+communication for mobile devices. The mobile networkingtechnology has been developed for decades, and it is playing
+Manuscript received 10 April 2024; accepted 5 June 2024. Date of
+publication 11 June 2024; date of current version 21 August 2024. The
+associate editor coordinating the review of this article and approving it forpublication was M. Shojafar. (Corresponding author: Jiayi Liu.)
+Jiayi Liu is with the Guangzhou Institute of Technology, Xidian University,
+Guangzhou 510530, China, and also with Pazhou Laboratory (Huangpu),
+Guangzhou 510530, China. (e-mail: jyliu@xidian.edu.cn).
+Zhongyi Xu and Xuefang Liu are with the School of Telecommunication,
+Xidian University, XiΓÇÖan 710071, China.
+Chen Wang is with the NoahΓÇÖs Ark Lab, Huawei, Shenzhen 518129, China.
+Xuemei Xie is with the School of Arti∩¼ücial Intelligence, Xidian
+University, XiΓÇÖan 710071, China, and also with Pazhou Laboratory (Huangpu),Guangzhou 510530, China.
+Guangming Shi is with the School of Arti∩¼ücial Intelligence, Xidian
+University, XiΓÇÖan 710071, China, also with Pazhou Laboratory (Huangpu),Guangzhou 510530, China, and also with Peng Cheng Laboratory, Shenzhen
+518066, China.
+Digital Object Identi∩¼üer 10.1109/TNSM.2024.3412959an increasingly important role in the ∩¼üeld of daily life and
+industrial production. Since the ∩¼ürst-generation (1G) mobile
+network, mobile networking has evolved signi∩¼ücantly and each
+generation represents signi∩¼ücant technological improvements.For each generation of mobile network, mobility management
+is one of the fundamental functionalities that enables effective
+services delivers and maintains connections towards mobileusers on the move [1]. The 3GPP 5G network also supports
+the mobility management functions with enhancements in user
+state management, handover and cell reselection, and Sessionand Service Continuity (SSC) [2]. The mobile data service
+is the fundamental service type in the 5G, hence service
+continuity has attracted more concern to ensure that user
+sessions will survive movements, and the 5G provides the
+∩¼éexibility by offering three types of SSC modes to addressvarious service continuity requirements.
+Multi-access edge computing (MEC) is a type of network
+architecture that delivers network services from the boundaryof the mobile network by provisioning a set of geographically
+distributed edge servers at the edge of the network. MEC
+has been widely adopted to enhance the performance ofvarious network services, such as mobile content delivery [3],
+smart city [4], Vehicle-to-Everything (V2X) applications [5],
+etc. For deploying an MEC system, determining an optimumplanning of MEC edge servers is a fundamental precondition
+for more ef∩¼ücient service provisioning and better usage of
+network resources [6]. The planning of MEC edge servers
+refers to the determination of (1) the optimal locations for
+MEC edge servers, and (2) the appropriate MEC edge servers
+serving areas, which has attracted wide attention in recent
+years. These two problems are tightly coupled, and the serving
+area determination is essential, based on which the locationdetermination problem can be reduced into ∩¼ünding the centroid
+within the serving area.
+In[7], the authors introduce a framework to jointly optimize
+the placement of MEC servers and User Plane Functions
+(UPF) in a dynamic network environment. They formulate
+the problem as Integer Linear Programming (ILP) and utilizea scheduling technique based on Optimal Stopping Theory
+(OST) to decide the optimal recon∩¼üguration time. In [8],
+the authors jointly consider edge server deployment andservice placement to maximize the overall pro∩¼üt of the MEC
+system. They propose a two-step method including a clustering
+algorithm and nonlinear programming to solve the formulatedproblem. In [6], the authors formulate the MEC edge servers
+placement problem with dynamic uncertain resource demands
+1932-4537 c/circlecopyrt2024 IEEE. Personal use is permitted, but republication/redistribution requires IEEE permission.
+See https://www.ieee.org/publications/rights/index.html for more information.
+Authorized licensed use limited to: POLO BIBLIOTECARIO DI INGEGNERIA. Downloaded on December 13,2024 at 14:57:12 UTC from IEEE Xplore.  Restrictions apply. 
+
+--- PAGE 2 ---
+4384 IEEE TRANSACTIONS ON NETWORK AND SERVICE MANAGEMENT, VOL. 21, NO. 4, AUGUST 2024
+through an uncertain programming formulation, and a deep-
+learning based algorithm is proposed to practically solve theproblem. In [9], the authors formulate the edge server place-
+ment problem as a capacitated location allocation problem
+and provide an algorithm for effective solutions. In [10],
+the authors study the MEC server placement in smart cities.
+They formulate the problem as a multi-objective constraint
+optimization problem and adopt mixed integer programmingto ∩¼ünd the optimal solution.
+However, MEC edge servers are provisioned to provide
+network services, and none of the above works consider theoptimization of MEC servers planning in terms of minimizing
+the management costs in providing service continuity for
+moving users. Moreover, existing works are based on tradi-
+tional model-based methods which formulate and solve the
+MEC server planning problem as an optimization problem.With the development of Arti∩¼ücial Intelligence (AI) tech-
+nology, machine learning-based methods are widely applied
+in various domains, including network optimization [11].
+Comparing to the traditional model-based optimization meth-
+ods, machine learning are model-free and data-driven, which
+could explore the intrinsic inner relationships between com-plex system parameters and possible to discover better
+solutions. Hence, in this current work, we aim to investigate
+the MEC servers planning problem by considering the man-agement cost for maintaining MEC service continuity with
+machine learning-based methods . Speci∩¼ücally, we focus on the
+MEC edge server serving area determination problem. Becauseupon the determined serving area of each MEC server, the
+optimal location can be further decided trivially by ∩¼ünding the
+centroid within the serving area.
+By considering the underlying Radio Access Network
+(RAN) in a certain region as a graph, the MEC servers plan-ning problem is formulated as a graph partitioning problem
+such that node weights represent Base Stations (BSs) average
+workloads and edge weights represent users handover man-agement costs in service data delivery. Hence, partitioning the
+RAN graph with minimum edge cuts and balanced cluster
+node weights refers to the optimum MEC servers planningwith minimum SSC management costs and balanced MEC
+servers workloads. To solve this formulated problem, we adapt
+a generalizable approximate Graph Partitioning frameworkproposed in [12] which leverages on Graph Neural Network
+(GNN) to embed the RAN network spacial features and on
+Multilayer Perceptron (MLP) for graph partitioning. We de∩¼ünethe loss function to generate partitions with balanced node
+weight and minimum edge cut. Based on this generalizable
+approximate partitioning (GAP) framework, we design anMEC server Planning algorithm, named as MECP-GAP, to
+determine the optimum MEC servers planning from an input
+RAN and users movements to minimize SSC management
+costs with balanced MEC servers workloads. Moreover, the
+framework is generalizable, once trained it can produce ef∩¼ü-cient partitions results on unseen graphs at inference time.
+Finally, we evaluate MECP-GAP with extensive simulations
+and real network data. Comparing to two traditional algorithmsfor graph partitioning problem, MECP-GAP achieves better
+performance with lower running time. Our contributions are
+summarized as follows:ΓÇóFirstly, we investigate the MEC servers planning problemto minimize the management cost for maintaining servicecontinuity for moving users. We formulate this problem
+as a graph partitioning problem with minimum edge cuts
+and balanced cluster node weights.
+ΓÇóThen, we adapt a learning-based framework to solve
+the above problem. By integrating GNN and MLP, the
+framework is generalizable for producing solutions forvarious types of unseen graphs at inference time. This is
+an advantage over the traditional model-based methods
+which must reperform the optimization problem for everynew use case.
+The rest of the paper is organized as follows. Related works
+are summarized in Section II. Then, Section IIIformulates
+the problem of mobility-aware MEC planning through graph
+partitioning. Then, we detail the MECP-GAP algorithm inSection IV. In Section V, we evaluate the performance gain of
+MECP-GAP over several baselines. Finally, we conclude this
+work in Section VI.
+II. R
+ELATED WORKS
+A. Mobility Management
+Mobile network planning optimization with respect to
+mobility management is an important issue and has beenintensively studied in the literature. From the GSM system, a
+group of cells is called Location Area (LA) to facilitate paging.
+The planning of LAs aims to balance the tradeoff betweentwo con∩¼éicting metrics: the amount of paging messages and
+registration signalling. In [13], the authors design the layout
+of LAs to balance this tradeoff for the GSM system. From
+the LTE system, Tracking Area (TA) is utilized to group cells
+and to locate mobile devices. In [14], the authors determine
+the TAs for the LTE network by applying multi-objective
+optimization for achieving a balanced tradeoff between pag-
+ing overhead and tracking area update, and they design anevolutionary multi-objective algorithm based on a population
+decomposition strategy. In [15], the authors propose an TA list
+management framework to format the optimal TA distributionin the form of TA lists and determine the association from
+TA lists towards mobile devices for the 5G system. Besides,
+data delivery is now the fundamental service types in mobilenetwork, and service continuity is essential important to ensure
+that user sessions and services will survive user mobility.
+In view of this, 5G enhances its mobility management byproviding three types of SSC modes to address various service
+continuity requirements. In [16], the authors analyze mobility-
+aware cellular network performance with several mobilitypatterns and network topologies. They also point out that
+mobility would impact on service delivery and outline the
+challenges for mobility-aware analysis. Hence, the 5G network
+planning optimization should also consider to optimize the
+structure and layout of the network for minimizing themanagement cost in maintaining service continuity. In this
+work, we aim to study the MEC servers planning problem by
+optimizing the management cost for maintaining MEC servicecontinuity.
+In[17], the authors consider the issue of managing high-
+speed mobility in 5G networks. To solve this problem,
+Authorized licensed use limited to: POLO BIBLIOTECARIO DI INGEGNERIA. Downloaded on December 13,2024 at 14:57:12 UTC from IEEE Xplore.  Restrictions apply. 
+
+--- PAGE 3 ---
+LIU et al.: MOBILITY-AWARE MEC PLANNING WITH A GNN-BASED GRAPH PARTITIONING FRAMEWORK 4385
+the authors propose an online learn-based mechanism that
+uses Kalman ∩¼ülters to compute the posterior value ofthe RSRP values of service units and adjacent units to
+determine the best target unit for switching, so as to
+maintain high performance under extremely high mobilityafter migration. Simulations show that this mechanism can
+signi∩¼ücantly improve handover execution in 5G, enabling
+intelligent handling of high-speed mobile management in 5Gand beyond. In [18], a novel two-layer cooperative satellite
+network architecture is proposed. Based on the proposed two-
+layer cooperative satellite network architecture, four mobilitymanagement scenarios in satellite-ground communication sce-
+narios are studied. For each scenario, the corresponding
+switching mode is proposed to ensure the continuity of
+terminal services, and the corresponding signaling overhead is
+analyzed. Simulation results show that the proposed switchingmode can greatly reduce the signaling overhead. In [19],t h e
+authors examine the challenges facing emerging and future
+cellular Networks such as Ultra-Dense Multi-Band Networks(UDMNs), including Resource-Inef∩¼üciency and Scarcity, User-
+Experience Degradation and Unprecedented Channel Behavior
+in mmWave Cells. The author proposes an Advanced MobilityManagement and Utilization based on machine-learning-based
+mobility and traf∩¼üc prediction models Framework. The frame-
+work is capable of predicting mobility patterns, next candidatecells for handover, and handover time, as well as future cell
+loads.
+B. MEC Planning
+Determining an optimum planning of MEC edge servers
+is a fundamental precondition for deploying an MEC system,
+which has attracted wide attention in recent years. Mostexisting works are traditional model-based methods which
+formulate the MEC planning problem as an optimization
+problem. Due to the complexity of the problem, heuristicalgorithms are normally proposed. In [7], the authors jointly
+optimize the placement of MEC servers and UPF through
+ILP in a dynamic network environment. In [8], the authors
+jointly consider edge server deployment and service placement
+to maximize the overall pro∩¼üt of the MEC system. They
+propose a two-step method including a clustering algorithmand nonlinear programming to solve the formulated problem.
+In[6], the authors formulate the MEC edge servers placement
+problem with dynamic uncertain resource demands throughan uncertain programming formulation, and a learning based
+algorithm is proposed to practically solve the problem. In
+their algorithm, meta-heuristic is utilized to explore the solu-tion space, with MLP utilized to perform a fast prediction
+for the ∩¼ütness function. In [9], the authors formulate the
+edge server placement problem as a capacitated location
+allocation problem and provide an heuristic algorithm for
+effective solutions. In [10], the authors study the MEC server
+placement in smart cities. They formulate the problem as
+a multi-objective constraint optimization problem and adopt
+mixed integer programming to ∩¼ünd the optimal solution. Formobility-aware MEC network resource allocation, in [20],
+the authors study the edge server user association problemin dynamic environment where edge user high mobility is
+considered. The problem is formulated as an online decision-making and evolvable process for allocating users at real-time.
+In[21], the authors propose a mobility-aware task of∩¼éoading
+scheme for vehicular MEC network, and they develop a DeepReinforcement Learning (DRL)-based algorithm to train the
+of∩¼éoading strategy.
+C. Graph Partitioning Problem
+We formulate the MEC planning problem as a graph
+partitioning problem, where BS nodes are partitioned into
+clusters and each cluster is served by one MEC server. The
+graph partitioning problem has been extensively studied in
+the literature. Hence, we also survey related works in this
+topic. Graph partitioning is the problem of dividing the nodesof a graph into balanced partitions while minimizing the
+edge cut across the partitions. Graph partitioning is a well
+studied optimization problem and has a wide application invarious domains. Traditional well-known algorithms include
+the Breadth First Search (BFS) algorithm, the Kernighan-Lin
+(KL) algorithm, the spectral method based on eigen-vectordecomposition of the graph Laplacian matrix. From the above
+methods, the METIS algorithm [22] works very well in prac-
+tice and is largely adopted. Moreover, with the developmentof the AI technology, there are also works that investi-
+gate solving the graph partitioning problem through machine
+learning-based methods. In [23], by combining the simulated-
+annealing algorithm and the Hop∩¼üeld neural network, the
+authors ∩¼ürst propose an learning based algorithm for solving
+the graph partitioning problem. In [12], the authors propose
+a Generalizable Approximate Partitioning framework, named
+as the GAP framework. The framework contains two parts: agraph embedding part that leverages on Graph Neural Network
+(GNN) to embed the graph spacial feature; and a graph parti-
+tioning part that leverages on Multilayer Perceptron (MLP) forgraph partitioning. In [24], a theoretical performance analysis
+of the GNN is presented. A mean-∩¼üeld theory of a minimal
+GNN architecture is developed for the graph partitioningproblem. Numerical experiment results shows GNNΓÇÖs accuracy
+in performing classi∩¼ücation tasks.
+D. Graph Neural Network
+Graph neural networks (GNNs) are a set of deep learning
+methods that treat graph structured data in non-Euclidean
+space. GNN has been intensively studied and applied inmultiple domains including: combinatorial optimization [12],
+computer vision [25], and network management [26].T h e
+idea of GNN was ∩¼ürst introduced in [27], the authors extend
+existing neural network methods for processing data repre-
+sented in graphical form. The general idea of GNN is to learn
+a state embedding by exploring topological structure of thegraph and aggregating information from the neighbors of each
+node. This embedding is then further utilized for downstream
+tasks, such as graph-level, node-level or edge level tasks.There are several types of GNNs. The Graph Convolutional
+Networks (GCNs) [28] utilize the convolution operation as
+Authorized licensed use limited to: POLO BIBLIOTECARIO DI INGEGNERIA. Downloaded on December 13,2024 at 14:57:12 UTC from IEEE Xplore.  Restrictions apply. 
+
+--- PAGE 4 ---
+4386 IEEE TRANSACTIONS ON NETWORK AND SERVICE MANAGEMENT, VOL. 21, NO. 4, AUGUST 2024
+Fig. 1. 5G MEC data network and MEC planning.
+de∩¼üned in the Fourier domain by computing the eigen decom-
+position of the graph Laplacian. The Message Passing NeuralNetworks (MPNNs) consists of message, update, and readout
+functions which operate on nodes and edges in the graph [29].
+The Graph Attention Networks (GAT) applies the attentionmechanism to aggregate information from node neighbors
+through a weighted sum [30]. The GAP framework [12] is
+designed to solve graph partitioning problem by using graphembedding and optimizing the partitioning loss function. In
+this work, we leverage on GAP to solve the mobility-aware
+MEC planning problem, which is formulated as a graphpartitioning problem. We design the input and the loss function
+to adjust the algorithm into our case. Simulation results shows
+that our improved framework and algorithm achieves betterplanning result with lower running time by comparing to
+several traditional baselines.
+III. S
+YSTEM MODEL
+In this section, we formulate the mobility-aware MEC
+edge servers planning problem, which takes into account the
+management cost for SSC continuity. The handover cost ofusers is formulated based on 3GPP technical speci∩¼ücations.
+Finally, the problem is formulated as a graph-partitioning
+problem with minimum edge cut and balanced node weight.
+A. Problem Description
+An overview of the 5G MEC data network and the cor-
+responding MEC planning is shown in Fig. 1. Three MEC
+servers are deployed to serve mobile users from multiple
+gNBs. Each MEC server is equipped with resources to serveusers from several certain gNBs, and these gNBs are the
+serving area of the MEC server. By applying the Uplink
+Classi∩¼üer (UL CL) technology and con∩¼üguring UPFs, traf∩¼üc
+from these gNBs can be directed to their serving MEC servers.
+In the case of PDU Sessions of type IPv4 or IPv6 or IPv4v6or Ethernet, the SMF may decide to insert in the data path
+of a PDU Session an ΓÇ£UL CLΓÇ¥ (Uplink classi∩¼üer). The UL
+CL is a functionality supported by an UPF that aims atdiverting (locally) some traf∩¼üc matching traf∩¼üc ∩¼ülters provided
+by the SMF [2]. The insertion and removal of an UL CL isFig. 2. SSC mode 1 handover procedure between gNBs.
+decided by the SMF and controlled by the SMF using generic
+N4 and UPF capabilities. The UL CL can be con∩¼üguredwith the traf∩¼üc rules to forward the uplink traf∩¼üc towards
+different targeted applications and network functions, and in
+the downlink direction it will merge the traf∩¼üc destined to theUEs [31].
+Mobile users are free to move, consequently, handovers
+can happen in different levels: gNBs level and MEC serverslevel. For a moving user, when she crosses the boundaries
+of gNBs, the userΓÇÖs PDU session, which starts from the user
+and ends in the MEC server, should take a handover fromgNB1 to gNB2, incurring signaling costs. The handover delay
+also leads to deteriorated user Quality of Experience (QoE).
+Furthermore, if the user moves in a large geographical scale
+which extends beyond the boundaries of MEC server serving
+area, this would results in higher handover signaling costand increased transmission delay. Therefore, the objective of
+mobility-aware MEC planning is to determine the serving
+areas of each MEC server to minimize the handover costs formobile users.
+B. Mobility Management Cost
+Then, we quantify the handover management costs in
+multiple different levels. In this paper, two types of handover
+procedures are considered: the ∩¼ürst one is between gNBs
+but within the same MEC serving area, and the second isbetween MEC servers. The ∩¼ürst one is also referred as SSC
+mode 1. SSC mode 1 is de∩¼üned in detail in the 3GPP
+technical speci∩¼ücation TS 23.502 [32], which comprehensively
+de∩¼ünes various procedures within the 5G system. Following
+the speci∩¼ücation, we provide a summary of the SSC mode
+1 handover procedure between gNBs, as shown in Fig. 2,w i t h
+detailed procedures outlined in Chapter 4.9.1.2 of TS 23.502.
+This handover process comprises handover preparation,
+handover execution, PDU Session modi∩¼ücation, channel cre-
+ation and registration procedure. Following these procedures,
+the UE PDU Session service undergoes a handover fromthe source-gNB (noted as Source NG-RAN in the ∩¼ügure) to the
+target-gNB (Target NG-RAN), controlled by 5G core network
+functions including AMF, SMF, and UPF. Consequently, wecalculate the cost c
+gfor handovers between gNBs within the
+same MEC serving area in SSC mode 1 as follows:
+Authorized licensed use limited to: POLO BIBLIOTECARIO DI INGEGNERIA. Downloaded on December 13,2024 at 14:57:12 UTC from IEEE Xplore.  Restrictions apply. 
+
+--- PAGE 5 ---
+LIU et al.: MOBILITY-AWARE MEC PLANNING WITH A GNN-BASED GRAPH PARTITIONING FRAMEWORK 4387
+Fig. 3. SSC mode 3 handover procedure between MEC servers.
+cg=THP+THE+TPMCC +TRP
+=2TN2+TN3+2TN4+2TN11
++5TXn+3TUEΓêÆRAN
++Thandover _decision +Tadmission _control,
+where TN2,TN3,TN4, and TN11represent the time delays
+between core network functions in the corresponding interface,
+whilst TXnandTUEΓêÆRAN denote the time delays between
+access network interfaces. Specially, Thandover _decision and
+Tadmission _control stand for the time consumed by network
+functions in decision-making processes. Considering that the
+time consumption for these functions is signi∩¼ücantly lower
+than the others, we neglect them in the following part.
+Then, we also provide an overview of the handover proce-
+dure between MEC servers in Fig. 3. The handover between
+MEC servers corresponds to SSC mode 2 and mode 3, asde∩¼üned in Chapter 4.3.5.2 of TS 23.502. For improved user
+QoE, in this work, we consider that the handover follows
+SSC mode 3 due to its lower service interruption delay. Then,as depicted in Fig. 3, this procedure comprises three primary
+steps. Initially, SMF1 determines UPF relocation based on the
+UEΓÇÖs mobility. Then, SMF2 establishes a new PDU sessionfrom MEC server2 to the UE. Finally, SMF1 releases the
+old PDU session from MEC server1 to the UE. Let c
+M
+denotes the handover cost between MEC servers, which can
+be calculated as:
+cM=Tdetermine +TPRP +TPEP
+=3TN1+2TN2+TN3+1 3 TN4+4TN6+6TN7
++4TN10+1 0 TN11+3TUEΓêÆRAN +TSMF _Selection
++TPCF _Selection +2TUPF _Selection +TTrigger.
+where TN1,TN2,TN3,TN4,TN6,TN7,TN10, and
+TN11represent the time delay between the correspond-
+ing core network functions through these interfaces, and
+TUEΓêÆRAN denotes the time delay from access network
+interfaces. Additionally, TSMF _Selection ,TPCF _Selection ,
+TUPF _Selection , and TTrigger denote the time consumed by
+network function decision-making processes. These decision-
+making processes are described in detail in clause 4.3.2.2.1 of
+TS 23.502. Each decision-making process in cMis a complex
+process to make decisions according to the actual situation, so
+the decision delay of cMis much larger than cgΓÇÖs.C. Graph-Partitioning Problem Formulation
+Let G=(V,E) represents a 5G RAN network graph,
+where the set V={vi}corresponds to the 5G gNBs, and the
+setE={e(vi,vj)|viΓêêV,vjΓêêV}represents the handover
+behaviors between gNBs. Then, the weight of e(vi,vj)is
+denoted as wij, which quanti∩¼ües the average number of users
+moving from gNB vito gNB vj. Moreover, we consider
+the graph Gas an undirected graph, because the handover
+behavior is symmetric between two gNBs. We assume thatthere are NgNBs in total, and all gNBs are served by several
+MEC Server. The total number of MEC Servers is denoted
+asP. Consequently, the entire RAN network should be divided
+intoPpartitions, de∩¼üned as S
+1,S2,..., SP. Hence, the union
+of all partitions is equal to V:Γê¬P
+k=1Sk=V, and each gNB
+exclusively belongs to one partition: SkΓê⌐S/prime
+k=ΓêàΓêÇk,k/prime.
+The number of gNBs in partition SkisNk, satisfying/summationtextP
+K=1Nk=N.
+As de∩¼üned in Section III-B , the handover cost between
+gNBs within the same MEC serving area is denoted as cg,
+whilst the handover cost between gNBs from different MECserving area is denoted as c
+M. Based on the descriptions
+provided for each interface in 3GPP TS23.501, it is obvious
+thatcM>cg.
+We introduce the decision variable xikto show the depen-
+dency relationship between gNB viand partition Sk, where
+xik=1 means that gNB vibelongs to partition Sk, and
+xik=0 indicates the opposite. Our objective is to minimize
+user handover costs by optimizing the distribution of MEC
+servers under load balancing conditions. Therefore, the objec-tive function is expressed as follows
+min╬▒┬╖Edge _cut+╬▓┬╖Load _balancing , (1)
+where
+Load _balancing =P/summationdisplay
+k=1/parenleftbigg
+NkΓêÆN
+P/parenrightbigg2
+=P/summationdisplay
+k=1/parenleftBiggN/summationdisplay
+i=1xikΓêÆN
+P/parenrightBigg2
+, (2)
+Edge _cut=cM┬╖P/summationdisplay
+k=1/summationdisplay
+viΓêêSk,vjΓêêSke/parenleftbig
+vi,vj/parenrightbig
+┬╖wij
++cg┬╖P/summationdisplay
+k=1/summationdisplay
+vi,vjΓêêSke/parenleftbig
+vi,vj/parenrightbig
+┬╖wij
+=cM┬╖lM+cg┬╖lg
+=cM┬╖lM+cg┬╖(lsumΓêÆlM)
+=/parenleftbig
+cMΓêÆcg/parenrightbig
+┬╖lM+cg┬╖lsum, (3)
+╬▒,╬▓are positive normalized parameters. In Eq. (3),w es e t
+lM=/summationdisplay
+viΓêêSk,vjΓêêSke/parenleftbig
+vi,vj/parenrightbig
+┬╖wij,
+lg=/summationdisplay
+vi,vjΓêêSke/parenleftbig
+vi,vj/parenrightbig
+┬╖wij,
+lsum =lM+lg,
+Authorized licensed use limited to: POLO BIBLIOTECARIO DI INGEGNERIA. Downloaded on December 13,2024 at 14:57:12 UTC from IEEE Xplore.  Restrictions apply. 
+
+--- PAGE 6 ---
+4388 IEEE TRANSACTIONS ON NETWORK AND SERVICE MANAGEMENT, VOL. 21, NO. 4, AUGUST 2024
+Fig. 4. The I-GAP framework.
+where Skis the complement of SkinV. The constraints of
+the problem are as follows:
+P/summationdisplay
+k=1xik=1ΓêÇviΓêêV, (4)
+P/summationdisplay
+k=1N/summationdisplay
+i=1xik=N. (5)
+From Eq. (1)to(3), our optimization objective is to
+minimize the sum of user mobility handover cost and network
+load balancing, with ╬▒and╬▓are used for balancing the
+optimization direction. Eq. (2)represents the variance of the
+number of gNBs within different partitions. For the layout
+and planning of gNBs, they are deployed to serve users byconsidering the geographical population density. Hence, the
+number of gNBs represents the workloads for MEC servers.
+In Eq. (3), we split the user handover cost into two parts:
+one is the handover cost resulting from movement between
+different partitions, and the other is the handover cost resultingfrom movement between gNBs within the same partition.
+Furthermore, Constraint (4)ensures that a gNB can only
+belong to one partition, and Constraint (5)implies that each
+gNB should be assigned to one partition.
+In Eq. (3), when c
+M>cgis ensured, the partition results
+S1,S2,..., SPremain unaffected by the speci∩¼üc values of cM
+and cg. Therefore, we set cM=1,cg=0, and simplify
+Eq.(3)into the following form. In this case, Edge _cut is
+de∩¼üned to minimize the weights of edges between differentpartitions.
+Edge _cut=l
+M=P/summationdisplay
+k=1/summationdisplay
+viΓêêSk,vjΓêêSke/parenleftbig
+vi,vj/parenrightbig
+┬╖wij,(6)
+Based on Eq. (2)and (6), the problem of mobility-aware
+MEC server planning is formulated into a graph partitioning
+problem. The objective is to determine an optimum balancedpartitions of the 5G RAN network to minimize the sum
+weights of edge cuts between partitions.IV . A
+LGORITHM
+In this section, we adapt the GAP framework [12] and
+design the MECP-GAP algorithm for mobility-aware MEC
+planning. Firstly, we introduce the graph learning-based GAPframework to tackle the Graph Partitioning problem. Then,
+the structure of our improved GAP framework is outlined,
+and the design of the loss function is described in detail.Subsequently, we develop the MECP-GAP algorithm based
+on deep learning to solve the MEC server planning problem.
+Finally, the algorithmΓÇÖs complexity is analyzed.
+A. Problem De∩¼ünition
+In Section III, we formulate the mobility-aware MEC server
+planning problem as a Graph Partitioning problem. Many tra-ditional algorithms have been proposed for solving the Graph
+Partitioning problem [33]. For instance, the Metis algorithm is
+a powerful graph partitioning software package known for its
+ef∩¼üciency [22]. Recently, deep learning is also applied in solv-
+ing optimization problems. The Graph Partitioning problemis also investigated to be solved through learning methods.
+The GAP framework, proposed in [12], utilizes the GNN for
+embedding graph nodes features and MLP for partitioningnodes. Comparing to traditional algorithms, the Learning-
+based GAP algorithm has made signi∩¼ücant improvements in
+optimization objectives and algorithm runtime. We improvedthis framework (noted as I-GAP framework) to adapt it to
+solve the above MEC servers planning problem. The I-GAP
+partitioning framework is illustrated in Fig. 4.
+1) Loss Function: Before introducing the I-GAP frame-
+work model, we ∩¼ürst present the modelΓÇÖs loss function. Ourobjective is to obtain the partition result X
+n├ùpbased on gNB
+features Fn├ùfand adjacency weights Wn├ùn. The partition
+result is represented as a n├ùpmatrix Xn├ùp. In this matrix,
+the element xik=1indicates that gNB vibelongs to partition
+Sk, while xik=0 represents the opposite. Thus, we can
+reformulate Eq. (6)as follows
+E[edge _cut]=/summationdisplay
+reduceΓêÆsumX┬╖(1ΓêÆX)TΓèÖW, (7)
+Authorized licensed use limited to: POLO BIBLIOTECARIO DI INGEGNERIA. Downloaded on December 13,2024 at 14:57:12 UTC from IEEE Xplore.  Restrictions apply. 
+
+--- PAGE 7 ---
+LIU et al.: MOBILITY-AWARE MEC PLANNING WITH A GNN-BASED GRAPH PARTITIONING FRAMEWORK 4389
+whereΓèÖrepresents the element-wise product./summationtext
+reduceΓêÆsum
+refers to the operation of summing the elements in an matrix,
+adding all elements together to obtain a single cumulative
+total. This is a common data processing and computational
+operation. The matrix Wn├ùnis the adjacency weight matrix,
+where each element wijcorresponds to the number of users
+moving from gNB vito gNB vj. Similarly, we can express
+Eq.(2)in matrix form as follows
+E[load_balancing ]=/summationdisplay
+reduceΓêÆsum/parenleftbigg
+1TXΓêÆN
+P/parenrightbigg2
+.(8)
+Combining Eq. (7)and Eq. (8), the loss function of I-GAP
+model can be expressed as follows
+L=╬▒┬╖/summationdisplay
+reduceΓêÆsumX┬╖(1ΓêÆX)TΓèÖW
++╬▓┬╖/summationdisplay
+reduceΓêÆsum/parenleftbigg
+1TXΓêÆN
+P/parenrightbigg2
+, (9)
+where╬▒and╬▓are used for normalization. They are con∩¼ügured
+to ensure that the values of edge cut and load balancing arewithin the same range.
+2) I-GAP Framework: The I-GAP model comprises two
+main modules: the graph embedding module and the graph
+partitioning module. The former focuses on learning nodeembeddings using both graph structure and node features. In
+I-GAP, the graphSAGE [34] model is employed to embed
+node representations, which emphasizes sampling and aggre-gation. As an inductive learning method, graphSAGE not only
+learns the embedding representations of each node in the
+graph, but also learns the aggregation function used to sample
+and aggregate neighbor nodes to generate new embedding rep-
+resentations of node [34]. Unlike other transductive methods
+which only perform representations learning on a ∩¼üxed graph,
+graphSAGE has good inductive ability and does not need to
+know the information of all nodes when implementing graphembedding, which is suitable for large-scale graphs and unseen
+graphs [35].
+In our I-GAP framework, we replace the adjacency matrix
+with the adjacency weight matrix to improve the sampling
+process of graphSAGE. Each node sample among its neighbors
+to aggregate their representations. This process is shown inEq.(10):
+h
+k
+N(v)ΓåÉAGGREGAT E k/parenleftBig
+{hkΓêÆ1
+u,ΓêÇuΓêêN(v)}/parenrightBig
+,(10)
+where hk
+N(v)represents the embedded representation of node
+vat the current step k.hkΓêÆ1u represents the embedded rep-
+resentation of node uat step kΓêÆ1, and N(v) represents
+all neighbors of node v. In the original graphSAGE model,
+neighbor sampling follows the uniform distribution. This
+means nodes take ∩¼üxed samples from their neighbors in a
+completely random manner. The process is shown in Eq. (11):
+uΓåÉUNIFORM (N(v)). (11)
+The improvement of graphSAGE lies in the improvement
+of the random sampling process. Speci∩¼ücally, suppose node v
+and node uare adjacent, and the edge weight between themiswvu. Then the probability that node uis sampled as the
+neighbor of node vis:
+P(u|v)=wvu/summationtext
+iΓêêN(v)wvi, (12)
+where/summationtext
+iΓêêN(v)wvirepresents the sum of adjacent edge
+weights from node vto all its neighbors. Then in our
+graphSAGE model, the sampling process can be described as:
+uΓåÉuw i t hp r o b a b i l i t yP (u|v). (13)
+As can be seen from Eq. (13), the larger the edge weight
+between two nodes, the easier it is sampled and aggregated
+together. After graph aggregation, their feature vectors aremore similar, so they are more easily to be divided into the
+same partition after graph partitioning module, which is also
+consistent with the problem to be solved in this paper.
+The graph partitioning module consists of a fully connected
+network followed by softmax and is trained to minimize the
+loss function Eq. (9). Because the graph partitioning module
+actually completes a classi∩¼ücation task. That is, according to
+the node embedding representation generated by the graph
+embedding module, the gNBs is classi∩¼üed into differentpartitions. As a ∩¼éexible model architecture, fully connected
+network can be applied to various classi∩¼ücation problems and
+has wide applicability in various scenarios [36].
+B. MECP-GAP Algorithm
+In this section, the MECP-GAP algorithm is proposed. The
+primary steps of this algorithm are outlined in Algorithm 1.
+It is emphasized that Algorithm 1operates in parallel
+with network training, concurrently producing the networkmodel and partition results. Consequently, the primary factor
+in∩¼éuencing the time complexity is the number of training
+epoch, denoted as e
+1.L e t Nrepresent the number of gNBs. In
+the sampling process, as we set a ∩¼üxed number of sampling,
+the time complexity of the sampling process is O(1). In the
+aggregation process, the mean representation of the neighbornodes needs to be calculated. Assuming that there are n∩¼üxed
+samples in the neighbors and the data feature dimension is
+m, the upper limit of the time complexity of the aggregation
+process is O(nΓêùm). As matrix operations are used in the
+actual calculation, the actual complexity will be less than this
+value.
+In the classi∩¼ücation process, the classi∩¼ücation network needs
+to be trained. Speci∩¼ücally, the training epoch is set as e
+2,b
+represents the number of batches, and the time complexity of
+calculating the loss function is related to batch size, denoted
+asO(s). We ignore the time which takes to update the
+network parameters. So, the time complexity of Algorithm 1
+isO(e1(N(1 + nΓêùm)+e2ΓêùbΓêùs)), simpli∩¼ües to O(e1N+
+e1Nnm +e1e2bs).
+C. Practical Relevance
+The proposed MECP-GAP algorithm solves the problem
+of MEC server deployment for mobility management. Sincethe MEC server needs suf∩¼ücient hardware support, the MEC
+server in our scenario will not move once deployed, which is
+Authorized licensed use limited to: POLO BIBLIOTECARIO DI INGEGNERIA. Downloaded on December 13,2024 at 14:57:12 UTC from IEEE Xplore.  Restrictions apply. 
+
+--- PAGE 8 ---
+4390 IEEE TRANSACTIONS ON NETWORK AND SERVICE MANAGEMENT, VOL. 21, NO. 4, AUGUST 2024
+Algorithm 1 MECP-GAP Algorithm
+Input: learning rate ╬╖; normalization parameters ╬▒,╬▓; epoch
+number Nepoch ; feature matrix Fn├ùf; adjacency weight matrix
+Wn├ùn.
+Output: partition probabilities matrix Xn├ùp.
+1:Initialize the fully network parameters and Xn├ùp;
+2:Divide the nodes into train nodes vtrain and test nodes
+vtest;
+3:forepoch 1=1,...,e1do
+4: Divide vtrain into batches.
+5: forviinvtrain do
+6: fiΓåÉsample neighbors according to Eq. (13) and
+aggregate fNeigh (i);
+7: Normalize fi;
+8: end for
+9: forepoch 2=1,...,e2do
+10: forbatch in range(batches) do
+11: X=classi∩¼ücation (Fbatch );
+12: L=calculate (X)with Wusing vbatch ;
+13: Update classi∩¼ücation network parameters using
+gradient descent based on L;
+14: end for
+15: end for
+16: Evaluate the network using vtest and update graph-
+SAGE network parameters;
+17:end for
+18:return Xn├ùp, I-GAP network model.
+also consistent with the reality. First, regarding the adaptability
+of the algorithm, based on the generalization ability of
+the I-GAP graph neural network framework, the network
+parameters obtained by training on a large graph can bedirectly used to partition the new graph (network) to deploy
+the MEC server. Therefore, MECP-GAP algorithm has good
+adaptability. MECP-GAP can even deal with unseen graphs,so it also has good robustness. Regarding the scalability
+of the algorithm, the MEC algorithm is suitable for small-
+scale networks (hundreds of gNBs) and large-scale networks(thousands of gNBs). When facing the challenge of hyper-scale
+network (millions of gNBs), network operators can manually
+split the network into many general scale networks. Thenthe MECP-GAP algorithm is applied to the general scale
+networks.
+V. S
+IMULATION
+We conduct intensive simulations to evaluate our proposed
+MECP-GAP algorithm. Two sets of simulations are conducted,
+the ∩¼ürst is a small scale network simulation to illustrate the
+partitioning results more clearly. The second is a large scale
+network simulation with real gNBs dataset. Comparing to twowidely used traditional graph partitioning algorithms, MECP-
+GAP achieves better partitioning results with lower running
+time.
+A. Simulation Setting
+In the small scale simulation, there are 200 gNBs, and their
+geographical locations are generated using a Poisson PointProcess. For the large scale simulation, we utilize the location
+coordinates of 2170 gNBs located in Shanghai, China, fromthe of∩¼ücial website of Opencellid [37]. Opencellid is an open-
+source platform that provides location coordinates for gNBs
+and eNBs across the globe.
+The adjacency weight matrix, denoted as W, incorpo-
+rates information about both the adjacency relationship and
+the number of handovers between gNBs. In our simula-tion, we utilize the human movement model proposed by
+Liang et al. [38] to generate the values in W. This model is
+capable of estimating the volume of population movementsbetween two regions based on the distance separating those
+regions and the sizes of the regions. It is a well-established
+human movement model commonly used in sociology, which
+enhances the realism of our simulation results. To generate W
+in our simulation, we ∩¼ürst create a V oronoi graph based onthe geographical locations of the gNBs. The V oronoi graph
+delineates the service areas for each gNB. Subsequently, we
+input the gNB location information and the associated areainformation into the human movement model to calculate the
+number of handover users moving between gNBs and obtain
+the adjacency weight matrix W.
+The I-GAP model comprises two primary modules: the
+graph embedding module and the graph partitioning module.
+In the graph embedding module, we employ the graphSAGEmodel, which is a 2-layer graph convolutional network. It takes
+input features with a dimensionality of 200 and outputs embed-
+dings of dimensionality 128. The gNBΓÇÖs geographical locationis utilized as its feature for both small scale and large scale
+simulations. To aggregate neighboring node representations in
+graphSAGE, we employ the mean aggregator. Compared with
+LSTM aggregator and pooling aggregator, the mean aggregator
+are more suitable for scenarios where the overall informationof neighbor nodes is retained. This method is often used in
+tasks such as node classi∩¼ücation and graph partitioning. In
+the graph partitioning module, we utilize a fully connectedneural network to transform the 128-dimensional input matrix
+into the desired number of partitions. The partition result Xis
+obtained using the softmax activation.
+B. Baseline Algorithms
+The greedy algorithm: in the work of Taleb and
+Ksentini [33], they introduced a pseudo-greedy algorithm
+to address the graph partitioning problem. This algorithminitiates by randomly selecting a node v
+ifrom the node
+set to serve as the center of partition Sk. It then iterates
+through all neighbors of vi, evaluating whether each neighbor
+satis∩¼ües certain constraint conditions. If a neighbor meets these
+conditions, it is added to partition Sk. This process continues
+until no more nodes can be added to the partition. This
+algorithm is a classical approach for graph partitioning, and
+its performance typically improves with an increased numberof iterations.
+The Metis algorithm [22]: is a widely used graph par-
+titioning algorithm known for its high ef∩¼üciency. It servesas a common baseline for graph partitioning algorithms.
+This algorithm requires input data regarding node and link
+information, as well as the desired number of partitions. It is
+Authorized licensed use limited to: POLO BIBLIOTECARIO DI INGEGNERIA. Downloaded on December 13,2024 at 14:57:12 UTC from IEEE Xplore.  Restrictions apply. 
+
+--- PAGE 9 ---
+LIU et al.: MOBILITY-AWARE MEC PLANNING WITH A GNN-BASED GRAPH PARTITIONING FRAMEWORK 4391
+capable of swiftly producing partition results, which makes it
+a suitable choice for our baseline comparison.
+PBPA: in [39], the author focuses on the operation and
+dynamic deployment of MEC servers. Based on PPO rein-
+forcement learning framework, PBPA algorithm is designedto determine the placement and migration of MEC servers in
+dynamic scenarios to minimize operating costs, which is a very
+advanced method in MEC server deployment related works.
+C. Small Scale Network Simulation
+In this section, a small-scale simulation involving 200 gNBs
+is conducted, and the speci∩¼üc partition results are shown in
+Fig. 5.
+Fig. 5(a-e) shows the outcomes of the small scale sim-
+ulation, ranging from two partitions to six partitions. Thepartitions are signi∩¼üed by different colored nodes, with blue
+lines denoting the boundaries of gNBΓÇÖs serving area created
+by the V oronoi graph. The black lines represent the numberof handovers, with thicker lines indicating higher handover
+numbers.
+In Fig. 5(a), the RAN network is partitioned into two parts
+with two colors. It is obvious that the two partitions are
+fairly balanced. In the case of more partitions, MECP-GAP
+ensures a balanced trade-off between edge cut optimizationand load balancing. In Fig. 5(b), green nodes are added as
+a new partition. This outcome stems from MECP-GAPΓÇÖs
+inclination towards improving the edge cut in this particularaccess network topology. Fig. 5(c-e) show the partition results
+for scenarios involving four to six partitions. The network
+operators can judiciously choose the number of partitions for
+MEC server deployment, taking into consideration the local
+user load and server capacity.
+Fig. 6illustrates the convergence behavior of MECP-GAP,
+using the six partitions scenario as an example. It becomes
+notably stable when the epochΓëê50.F i g . 7presents a com-
+parison of the average running times for the three algorithms.
+Since PBPA deploying MEC servers only be used on a
+∩¼üxed graph. So the algorithm execution and network trainingprocess of PBPA are carried out simultaneously. Its simulation
+time is about 242.32s~265.45s. As the time is much longer
+than the above three algorithmsΓÇÖ, we did not put it on Fig. 7.
+It should be noted that we rely on the runtime performance
+of MECP-GAP derived from the trained I-GAP network
+model. This approach leverages the inherent generalizationcapabilities of the I-GAP network model. Notably, the MECP-
+GAP algorithm consistently maintains a low running time. In
+contrast, both the Greedy algorithm and Metis take longer toexecute than MECP-GAP. The running time of the Greedy
+algorithm appears to change with the number of partitions,
+suggesting that the algorithmΓÇÖs performance may be in∩¼éuenced
+by the partition number. Metis, on the other hand, runs the
+longest, approximately three times as long as MECP-GAP.
+Fig. 8(a-c) illustrate the loss function, edge cut, and
+load balancing plots with different number of partitions. In
+Fig. 8(a), all the four curves increase as the number of
+partitions increases. ItΓÇÖs worth noting that, for the purpose of
+demonstrating algorithm performance, we set ╬▒=1/1000 and
+Fig. 5. Small scale network partition result from two partitions to six
+partitions.
+╬▓=1. So the result values of edge cut and load balancing
+are in the same order of magnitude. Consequently, the trend
+of the curve in Fig. 8(a) is similar to that in Fig. 8(b).
+Authorized licensed use limited to: POLO BIBLIOTECARIO DI INGEGNERIA. Downloaded on December 13,2024 at 14:57:12 UTC from IEEE Xplore.  Restrictions apply. 
+
+--- PAGE 10 ---
+4392 IEEE TRANSACTIONS ON NETWORK AND SERVICE MANAGEMENT, VOL. 21, NO. 4, AUGUST 2024
+Fig. 6. Convergence of MECP-GAP for small scale network.
+Fig. 7. Running time of MECP-GAP for small scale network.
+The loss function of MECP-GAP is optimized under each
+partition because both of its components are optimal, as
+con∩¼ürmed by Fig. 8(b) and Fig. 8(c). Fig. 8(b) shows the
+edge cut values, which increase with the growing number of
+partitions. Meanwhile, Fig. 8(c) displays the load balancing
+results of the three algorithms as they change with the number
+of partitions. Notably, the load balancing for the Greedy
+algorithm, Metis and PBPA exhibits no ∩¼üxed trend due to theinherent randomness of these two algorithms. However, for
+MECP-GAP, the load balancing generally increases from 2 to
+53 with the growing number of partitions.
+Fig. 9shows how the average handover delay of users
+changes over time in the small-scale network. The six par-
+titions results generated by four algorithms are deployed tosmall-scale networks. By setting the mobile user to move
+linearly between different gNB areas, the simulation time is set
+to 80 minutes. The ∩¼ürst ten minutes are the warm-up time. Asthe mobile users are deployed to the network, it begins to move
+in the network and across the boundaries of the MEC coverage
+area. Then the handover delay of the user to handover betweenthe MEC server coverage areas under different algorithm is
+observed. It can be seen that MECP-GAP algorithm is the
+smallest in most of the time. It means that in the MEC service
+network generated by MECP-GAP, the average handover delay
+of users is the lowest. Besides, its ∩¼éuctuation is also the moststable, which shows that the load balancing part of the loss
+function works, so that the handover tasks of users are more
+balanced. In contrast, Metis and Greedy perform less well. Theaverage handover delay of PBPA is the highest and ∩¼éuctuates
+in a wide range.Fig. 8. Small scale optimization objective: (a) loss function, (b) edge cut,
+(c) load balancing.
+D. Large Scale Network Simulation
+In this section, we present the results of the large scale
+simulation. Due to the high density of gNBs in the simulation,the speci∩¼üc partition result graph would not be displayed.
+Fig. 10illustrates the convergence of the MECP-GAP
+algorithm in the large scale simulation. ItΓÇÖs evident that the
+algorithm approaches convergence when epoch<50.F i g . 11
+displays the average running time of the three algorithms inthe large scale simulation. Metis exhibits a slightly shorter
+average running time than MECP-GAP, indicating that Metis
+has a time advantage when dealing with large scale networks.The running time of Metis ∩¼éuctuates between 1032 ms and
+1104 ms, while MECP-GAP ∩¼éuctuates between 1427 ms and
+Authorized licensed use limited to: POLO BIBLIOTECARIO DI INGEGNERIA. Downloaded on December 13,2024 at 14:57:12 UTC from IEEE Xplore.  Restrictions apply. 
+
+--- PAGE 11 ---
+LIU et al.: MOBILITY-AWARE MEC PLANNING WITH A GNN-BASED GRAPH PARTITIONING FRAMEWORK 4393
+Fig. 9. Average handover delay for small scale network.
+Fig. 10. Convergence of MECP-GAP for large scale network.
+Fig. 11. Running time of MECP-GAP for large scale network.
+1540 ms. Specially, the Greedy algorithm runs signi∩¼ücantly
+slower than the ∩¼ürst two when handling large scale networks,
+taking approximately ten times longer than the others. Thisis due to the high time complexity of greedy algorithms in
+the worst-case scenario. Similarly, PBPA only be used on a
+∩¼üxed graph when deploying MEC servers. The execution timeof PBPA is in range of 1598.68s~1683.41s, which is much
+longer than the previous three algorithms. So it is not marked
+in Fig. 11.
+Fig. 12(a-c) illustrates the changes in the loss function
+and its components for the four algorithms in the large-scalesimulation. In Fig. 12(a), itΓÇÖs evident that MECP-GAPΓÇÖs loss
+function remains optimal, roughly
+1
+3Γê╝1
+2of Metis. Fig. 12(b)
+speci∩¼ücally examines the edge cut component. The value forMECP-GAP is slightly lower than MetisΓÇÖs, both of which are
+lower than the Greedy algorithm and PBPA. In Fig. 12(c),Fig. 12. Large scale optimization objective: (a) loss function, (b) edge cut,
+(c) load balancing.
+it becomes apparent that the load balancing achieved by
+MECP-GAP is better in each partition compared to the other
+algorithms. This indicates that the partitions created by MECP-
+GAP are more balanced, making the server less prone tooverload issues.
+Fig. 13shows how the average handover delay of the four
+algorithms changes over time in a large-scale network. It is
+generated in the same way as the small-scale simulation. It is
+obvious that MECP-GAP has the best performance in termsof delay value and stability. In contrast, Metis and Greedy
+delay values are longer and ∩¼éuctuate in a large range. PBPA
+∩¼éuctuates in a large range, and its delay value is the longestin four algorithms. Mobile users have the worst handover
+experience in this scenario.
+Authorized licensed use limited to: POLO BIBLIOTECARIO DI INGEGNERIA. Downloaded on December 13,2024 at 14:57:12 UTC from IEEE Xplore.  Restrictions apply. 
+
+--- PAGE 12 ---
+4394 IEEE TRANSACTIONS ON NETWORK AND SERVICE MANAGEMENT, VOL. 21, NO. 4, AUGUST 2024
+Fig. 13. Average handover delay for large scale network.
+VI. C ONCLUSION
+In this work, we investigate the optimum mobility-aware
+MEC server planning problem by determining the serving area
+of each MEC servers to minimize the handover management
+cost for maintaining service continuity and balancing MEC
+servers workloads at the same time. The problem is formulated
+as a graph partitioning problem to partition the 5G RANgraph with minimum SSC management costs and balanced
+MEC servers workloads. Then, we adapt the GAP framework
+and propose a MEC server planning algorithm MECP-GAP.Leveraging on deep learning, MECP-GAP achieves better
+performance with lower running time by comparing to sev-
+eral traditional baselines. For future work, network planningoptimization should be emphasized on more network scenar-
+ios, such as the 6G network. And learning based methods can
+be applied in dealing with more typical problems.
+R
+EFERENCES
+[1] S. Ji, M. Sheng, D. Zhou, W. Bai, Q. Cao, and J. Li, ΓÇ£Flexible
+and distributed mobility management for integrated terrestrial-satellite
+networks: Challenges, architectures, and approaches,ΓÇ¥ IEEE Netw. ,
+vol. 35, no. 4, pp. 73ΓÇô81, Jul./Aug. 2021.
+[2] ΓÇ£System architecture for the 5G system; stage 2; Release 15,ΓÇ¥ 3GPP,
+Sophia Antipolis, France, Rep. TS 23.501, 2017.
+[3] J. Liu, Q. Yang, and G. Simon, ΓÇ£Congestion avoidance and load
+balancing in content placement and request redirection for mobile CDN,ΓÇ¥
+IEEE/ACM Trans. Netw. , vol. 26, no. 2, pp. 851ΓÇô863, Apr. 2018.
+[4] T. Taleb, S. Dutta, A. Ksentini, M. Iqbal, and H. Flinck, ΓÇ£Mobile edge
+computing potential in making cities smarter,ΓÇ¥ IEEE Commun. Mag. ,
+vol. 55, no. 3, pp. 38ΓÇô43, Mar. 2017.
+[5] J. Qin and J. Liu, ΓÇ£Multi-access edge of∩¼éoading based on physical layer
+security in C-V2X system,ΓÇ¥ IEEE Trans. Veh. Technol. , vol. 71, no. 7,
+pp. 6912ΓÇô6923, Jul. 2022.
+[6] M. Shao, J. Liu, Q. Yang, and G. Simon, ΓÇ£A learning based framework
+for MEC server planning with uncertain BSs demands,ΓÇ¥ IEEE Access ,
+vol. 8, pp. 198832ΓÇô198844, 2020.
+[7] I. Leyva-Pupo, C. Cervell├│-Pastor, C. Anagnostopoulos, and
+D. P. Pezaros, ΓÇ£Dynamic scheduling and optimal recon∩¼üguration of
+UPF placement in 5G networks,ΓÇ¥ in Proc. 23rd Int. ACM Conf. Model.,
+Anal. Simul. Wireless Mobile Syst. , 2020, pp. 103ΓÇô111. [Online].
+Available: https://doi.org/10.1145/3416010.3423221
+[8] X. Zhang, Z. Li, C. Lai, and J. Zhang, ΓÇ£Joint edge server placement and
+service placement in mobile-edge computing,ΓÇ¥ IEEE Internet Things J. ,
+vol. 9, no. 13, pp. 11261ΓÇô11274, Jul. 2022.
+[9] T. L├ñhderanta et al., ΓÇ£Edge computing server placement with capacitated
+location allocation,ΓÇ¥ J. Parallel Distrib. Comput. , vol. 153, pp. 130ΓÇô149,
+Jul. 2021. [Online]. Available: https://www.sciencedirect.com/science/
+article/pii/S0743731521000605
+[10] S. Wang, Y . Zhao, J. Xu, J. Yuan, and C.-H. Hsu, ΓÇ£Edge server placement
+in mobile edge computing,ΓÇ¥ J. Parallel Distrib. Comput. , vol. 127,
+pp. 160ΓÇô168, May 2019. [Online]. Available: https://www.sciencedirect.
+com/science/article/pii/S0743731518304398[11] C.-X. Wang, M. D. Renzo, S. Stanczak, S. Wang, and E. G. Larsson,
+ΓÇ£Arti∩¼ücial intelligence enabled wireless networking for 5G and beyond:Recent advances and future challenges,ΓÇ¥ IEEE Wireless Commun. ,
+vol. 27, no. 1, pp. 16ΓÇô23, Feb. 2020.
+[12] A. Nazi, W. Hang, A. Goldie, S. Ravi, and A. Mirhoseini,
+ΓÇ£GAP: Generalizable approximate graph partitioning framework,ΓÇ¥ 2019,arXiv:1903.00614 .
+[13] I. Demirkol, C. Ersoy, M. Caglayan, and H. Delic, ΓÇ£Location area
+planning and cell-to-switch assignment in cellular networks,ΓÇ¥ IEEE
+Trans. Wireless Commun. , vol. 3, no. 3, pp. 880ΓÇô890, May 2004.
+[14] L. Chen, H.-L. Liu, Z. Fan, S. Xie, and E. D. Goodman, ΓÇ£Modeling the
+tracking area planning problem using an evolutionary multi-objective
+algorithm,ΓÇ¥ IEEE Comput. Intell. Mag. , vol. 12, no. 1, pp. 29ΓÇô41,
+Feb. 2017.
+[15] M. Bagaa, T. Taleb, and A. Ksentini, ΓÇ£Ef∩¼ücient tracking area manage-
+ment framework for 5G networks,ΓÇ¥ IEEE Trans. Wireless Commun. ,
+vol. 15, no. 6, pp. 4117ΓÇô4131, Jun. 2016.
+[16] H. Tabassum, M. Salehi, and E. Hossain, ΓÇ£Fundamentals of mobility-
+aware performance characterization of cellular networks: A tutorial,ΓÇ¥
+IEEE Commun. Surveys Tuts. , vol. 21, no. 3, pp. 2288ΓÇô2308, 3rd Quart.,
+2019.
+[17] R. Karmakar, G. Kaddoum, and S. Chattopadhyay, ΓÇ£Mobility man-
+agement in 5G and beyond: A novel smart handover with adaptive
+time-to-trigger and hysteresis margin,ΓÇ¥ IEEE Trans. Mobile Comput. ,
+vol. 22, no. 10, pp. 5995ΓÇô6010, Oct. 2023.
+[18] X. Huang, J. Zong, and Y . Liu, ΓÇ£Mobility management for novel
+cooperative two-layer satellite network,ΓÇ¥ in Proc. Int. Wireless Commun.
+Mobile Comput. (IWCMC) , 2023, pp. 1275ΓÇô1280.
+[19] S. M. A. Zaidi, H. Farooq, A. Rizwan, A. Abu-Dayya, and A. Imran,
+ΓÇ£A framework to address mobility management challenges in emerging
+networks,ΓÇ¥ IEEE Wireless Commun. , vol. 30, no. 4, pp. 90ΓÇô97, Jan. 2023.
+[20] Q. Peng et al., ΓÇ£Mobility-aware and migration-enabled online edge user
+allocation in mobile edge computing,ΓÇ¥ in Proc. IEEE Int. Conf. Web
+Services (ICWS)
+, 2019, pp. 91ΓÇô98.
+[21] L. Zhao et al., ΓÇ£MESON: A mobility-aware dependent task of∩¼éoading
+scheme for urban vehicular edge computing,ΓÇ¥ IEEE Trans. Mobile
+Comput. , vol. 23, no. 5, pp. 4259ΓÇô4272, May 2024.
+[22] B. W. Kernighan and S. Lin, ΓÇ£An ef∩¼ücient heuristic procedure for
+partitioning graphs,ΓÇ¥ Bell Syst. Tech. J. , vol. 49, no. 2, pp. 291ΓÇô307,
+1970.
+[23] D. Van den Bout and T. Miller, ΓÇ£Graph partitioning using annealed
+neural networks,ΓÇ¥ IEEE Trans. Neural Netw. , vol. 1, no. 2, pp. 192ΓÇô203,
+1990.
+[24] T. Kawamoto, M. Tsubaki, and T. Obuchi, ΓÇ£Mean-∩¼üeld theory of graph
+neural networks in graph partitioning,ΓÇ¥ 2018, arXiv:1810.11908 .
+[25] D. Gao, K. Li, R. Wang, S. Shan, and X. Chen, ΓÇ£Multi-modal graph
+neural network for joint reasoning on vision and scene text,ΓÇ¥ inProc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR) , 2020,
+pp. 12743ΓÇô12753.
+[26] Y . Wu, J. Liu, C. Wang, and Q. Yang, ΓÇ£Graph attention LSTM for
+load prediction of ∩¼üne-grained VNFs in SFC,ΓÇ¥ in Proc. IEEE Int. Conf.
+Commun. , 2023, pp. 4899ΓÇô4904.
+[27] F. Scarselli, M. Gori, A. C. Tsoi, M. Hagenbuchner, and G. Monfardini,
+ΓÇ£The graph neural network model,ΓÇ¥ IEEE Trans. Neural Netw. , vol. 20,
+no. 1, pp. 61ΓÇô80, Jan. 2009.
+[28] T. Kipf and M. Welling, ΓÇ£Semi-supervised classi∩¼ücation with graph
+convolutional networks,ΓÇ¥ 2017, arXiv:1609.02907 .
+[29] J. Gilmer, S. S. Schoenholz, P. F. Riley, O. Vinyals, and G. E. Dahl,
+Message Passing Neural Networks . Cham, Switzerland: Springer Int.
+Publ., 2020, pp. 199ΓÇô214.
+[30] P. Velickovic, G. Cucurull, A. Casanova, A. Romero, P. Lio, and
+Y . Bengio, ΓÇ£Graph attention networks,ΓÇ¥ in Proc. ICLR , 2017, p. 20.
+[31] S. Kekki et al., ΓÇ£MEC in 5G networks,ΓÇ¥ ETSI, Sophia Antipolis, France,
+White Paper, 2018.
+[32] ΓÇ£Procedures for the 5G system (5GS),ΓÇ¥ ETSI, Sophia Antipolis, France,
+document TS 123 502-2021, 2021.
+[33] T. Taleb and A. Ksentini, ΓÇ£Gateway relocation avoidance-aware network
+function placement in carrier cloud,ΓÇ¥ in Proc. 16th ACM Int. Conf.
+Model., Anal. Simul. Wireless Mobile Syst. , 2013, pp. 341ΓÇô346.
+[34] W. Hamilton, Z. Ying, and J. Leskovec, ΓÇ£Inductive representation
+learning on large graphs,ΓÇ¥ in Proc. 31st Int. Conf. Adv. Neural Inf.
+Process. Syst. , vol. 30, 2017, pp. 1025ΓÇô1035.
+[35] Z. Wu, S. Pan, F. Chen, G. Long, C. Zhang, and P. S. Yu, ΓÇ£A
+comprehensive survey on graph neural networks,ΓÇ¥ IEEE Trans. Neural
+Netw. Learn. Syst. , vol. 32, no. 1, pp. 4ΓÇô24, Jan. 2021.
+Authorized licensed use limited to: POLO BIBLIOTECARIO DI INGEGNERIA. Downloaded on December 13,2024 at 14:57:12 UTC from IEEE Xplore.  Restrictions apply. 
+
+--- PAGE 13 ---
+LIU et al.: MOBILITY-AWARE MEC PLANNING WITH A GNN-BASED GRAPH PARTITIONING FRAMEWORK 4395
+[36] P. C. Sen, M. Hajra, and M. Ghosh, ΓÇ£Supervised classi∩¼ücation algorithms
+in machine learning: A survey and review,ΓÇ¥ in Proc. IEM Graph Emerg.
+Technol. Model. Graph. , 2020, pp. 99ΓÇô111.
+[37] 2022, ΓÇ£The worldΓÇÖs largest open database of cell towers,ΓÇ¥ Data Set,
+OpenCellID. [Online]. Available: https://www.opencellid.org/#zoom=
+16&lat=37.77889&lon=-122.41942
+[38] X. Liang, J. Zhao, L. Dong, and K. Xu, ΓÇ£Unraveling the origin of
+exponential law in intra-urban human mobility,ΓÇ¥ Sci. Rep. , vol. 3, no. 1,
+p. 2983, 2013.
+[39] X. Jiang, P. Hou, H. Zhu, B. Li, Z. Wang, and H. Ding, ΓÇ£Dynamic
+and intelligent edge server placement based on deep reinforcement
+learning in mobile edge computing,ΓÇ¥ Ad Hoc Netw. , vol. 145, Jun. 2023,
+Art. no. 103172.
+Jiayi Liu (Member, IEEE) received the Bachelor
+of Science degree in electronic engineering from
+Xidian University, XiΓÇÖan, China, in 2007, theMaster of Science degree in computer science from
+T├⌐l├⌐com-Bretagne, France, in 2009, and the Ph.D.
+degree from Rennes 1 University, France, in 2013.Since 2014, she has been working as a Lecturerwith the School of Telecommunication Engineering
+and the Guangzhou Institute of Technology, Xidian
+University. Her research interests include 5/6Gnetwork, content distribution, network resource
+scheduling, and AI enabled network management.
+Zhongyi Xu received the B.S. degree in communica-
+tion engineering from Shandong University, Weihai,China, in 2021, and the M.S. degree in communica-tion and information system from Xidian University,
+XiΓÇÖan, China, in 2024. His research interests include
+5G network and mobile edge computing.
+Chen Wang received the Bachelor of Science
+degree in computer science from Tongji University,
+Shanghai, China, in 2007, the Master of Science
+degree in computer science from T├⌐l├⌐com-Bretagne,France, in 2009, and the Ph.D. degree from theNational Institutes of Science and Technology,
+France, in 2013. He worked as a Research Scientist
+with Bosch, China, from 2014 to 2017. Since2017, he has been working as a Research Scientistwith Huawei. His current research interests include
+machine learning algorithms and AI applications.
+Xuefang Liu received the B.S. degree in commu-
+nication engineering from the Lanzhou Universityof Technology, China, in 1998, and the M.S. andPh.D. degrees in information and communication
+systems from Xidian University, China, in 2004 and
+2009, respectively. Since 1998, she has been withXidian University. During this time, she also wenton a study tour with the University of Houston
+from 2016 to 2017. Her current research interest lies
+in the ∩¼üelds of cooperative communication, contentdelivery networks, and 6G communication networks.
+Xuemei Xie (Senior Member, IEEE) received the
+M.S. degree in electronic engineering from Xidian
+University, XiΓÇÖan, China, in 1994, and the Ph.D.
+degree in electrical and electronic engineering fromThe University of Hong Kong in 2004. She is aProfessor with the School of Arti∩¼ücial Intelligence,
+Xidian University. Her research interests are human
+action recognition, object detection, scene under-standing, video analysis, deep learning, and featurerepresentation.
+Guangming Shi (Fellow, IEEE) received the M.S.
+degree in computer control and the Ph.D. degree
+in electronic information technology from XidianUniversity, XiΓÇÖan, China, in 1988 and 2002, respec-
+tively, where he was the Vice President from
+2018 to 2022. He is currently the Vice Dean ofPeng Cheng Laboratory and a Professor with theSchool of Arti∩¼ücial Intelligence, Xidian University.
+His research interests include arti∩¼ücial intelligence,
+semantic communications, and human-computerinteraction. He was awarded the Cheung Kong
+Scholar Chair Professor by the Ministry of Education in 2012. He won the
+Second Prize of the National Natural Science Award in 2017. He is the Chair
+of IEEE CASS Xian Chapter, a Senior Member of ACM and CCF, and aFellow of the Chinese Institute of Electronics and of IET.
+Authorized licensed use limited to: POLO BIBLIOTECARIO DI INGEGNERIA. Downloaded on December 13,2024 at 14:57:12 UTC from IEEE Xplore.  Restrictions apply. 
+

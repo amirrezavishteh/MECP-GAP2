@@ -1,0 +1,10 @@
+{
+  "num_nodes": 200,
+  "num_edges": 581,
+  "area_size": 10.0,
+  "gamma": 1.5,
+  "total_weight": 86657.4212328369,
+  "avg_degree": 5.81,
+  "seed": 42,
+  "generation_method": "Poisson Point Process + Voronoi + Gravity Model"
+}

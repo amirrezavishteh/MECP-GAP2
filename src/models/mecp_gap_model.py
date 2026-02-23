@@ -227,6 +227,7 @@ class MECP_GAP_Model(nn.Module):
         self.num_partitions = num_partitions
         self.num_layers = num_layers
         self.dropout = dropout
+        self.temperature = 1.0  # Temperature for softmax sharpening
         
         # ========================================
         # 1. Graph Embedding Module (GraphSAGE)
@@ -319,9 +320,10 @@ class MECP_GAP_Model(nn.Module):
         # Graph Partitioning Module
         logits = self.partition_mlp(h)
         
-        # Softmax for probability distribution over partitions
+        # Temperature-scaled softmax for probability distribution over partitions
+        # Lower temperature = sharper assignments, higher = more uniform
         # Paper Equation: X_ip = probability that node i belongs to partition p
-        probs = F.softmax(logits, dim=-1)
+        probs = F.softmax(logits / self.temperature, dim=-1)
         
         if return_embeddings:
             return probs, embeddings

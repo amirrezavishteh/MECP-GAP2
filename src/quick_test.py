@@ -19,16 +19,16 @@ coords, G, W_matrix = generator.generate()
 print(f'Generated: {len(coords)} nodes, {np.count_nonzero(W_matrix)//2} edges')
 
 # Quick training test
-print('\nRunning quick training test (20 epochs)...')
+print('\nRunning quick training test (50 epochs)...')
 assignments, results = train_mecp_gap(
     coords, W_matrix,
     num_partitions=4,
-    num_epochs=20,
+    num_epochs=50,
     verbose=True
 )
 
 # Compute metrics
-metrics = compute_partition_metrics(W_matrix, assignments)
+metrics = compute_partition_metrics(W_matrix, assignments, num_partitions=4)
 print(f'\nFinal metrics:')
 print(f'  Edge cut ratio: {metrics["edge_cut_ratio"]*100:.2f}%')
 print(f'  Partition sizes: {metrics["partition_sizes"]}')

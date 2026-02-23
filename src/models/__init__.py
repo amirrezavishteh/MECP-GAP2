@@ -18,6 +18,8 @@ from .loss_functions import (
     RatioCutLoss,
     ModularityLoss,
     MECP_Loss_Extended,
+    SSCModeCost,
+    MECP_Loss_SSC,
     compute_hard_cut,
     compute_balance_ratio,
     compute_modularity
@@ -39,6 +41,8 @@ __all__ = [
     'RatioCutLoss',
     'ModularityLoss',
     'MECP_Loss_Extended',
+    'SSCModeCost',
+    'MECP_Loss_SSC',
     
     # Evaluation Metrics
     'compute_hard_cut',
