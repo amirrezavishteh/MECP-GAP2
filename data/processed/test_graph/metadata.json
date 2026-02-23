@@ -1,0 +1,7 @@
+{
+  "num_nodes": 50,
+  "num_edges": 136,
+  "area_size": 10.0,
+  "gamma": 1.5,
+  "mode": "synthetic"
+}
