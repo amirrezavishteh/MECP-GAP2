@@ -49,9 +49,16 @@ from baselines.random_baseline import RandomPartitioner, run_random_multiple
 # Try optional imports
 try:
     from baselines.metis_baseline import MetisPartitioner, MetisFallback
-    HAS_METIS = True
+    # Test if pymetis actually works
+    try:
+        _tmp = MetisPartitioner(2)
+        HAS_PYMETIS = True
+    except Exception:
+        HAS_PYMETIS = False
+    HAS_METIS = True  # MetisFallback always available
 except ImportError:
     HAS_METIS = False
+    HAS_PYMETIS = False
 
 try:
     from baselines.pbpa_baseline import PBPAPartitioner, PBPAConfig
@@ -281,26 +288,27 @@ def run_baselines(coords, W_matrix, num_partitions=DEFAULT_PARTITIONS):
     except Exception as e:
         print(f"Failed: {e}")
     
-    # --- METIS ---
-    print(f"  [METIS] Running...", end=" ", flush=True)
+    # --- METIS / Spectral ---
+    print(f"  [METIS/Spectral] Running...", end=" ", flush=True)
     try:
-        if HAS_METIS:
-            set_seeds()
+        set_seeds()
+        if HAS_METIS and HAS_PYMETIS:
             partitioner = MetisPartitioner(num_partitions=num_partitions, seed=SEED)
             start = time.time()
             metis_assign = partitioner.fit(W_matrix)
             metis_time = time.time() - start
-        else:
-            # Spectral fallback
-            set_seeds()
+            label = 'METIS'
+        elif HAS_METIS:
             start = time.time()
             metis_assign = MetisFallback.spectral_partition(W_matrix, num_partitions)
             metis_time = time.time() - start
+            label = 'Spectral'
+        else:
+            raise ImportError("No METIS or spectral fallback available")
         
         metis_metrics = compute_partition_metrics(W_matrix, metis_assign, num_partitions)
-        all_results['METIS'] = {**metis_metrics, 'time': metis_time}
-        all_assignments['METIS'] = metis_assign
-        label = "METIS" if HAS_METIS else "Spectral (METIS fallback)"
+        all_results[label] = {**metis_metrics, 'time': metis_time}
+        all_assignments[label] = metis_assign
         print(f"Done ({metis_time:.2f}s) - Cut ratio: {metis_metrics['edge_cut_ratio']*100:.2f}%")
     except Exception as e:
         print(f"Failed: {e}")
@@ -431,19 +439,22 @@ def run_partition_sweep(coords, W_matrix):
             print(f"Failed: {e}")
         
         # METIS / Spectral
-        print(f"    [METIS] Running...", end=" ", flush=True)
+        print(f"    [METIS/Spectral] Running...", end=" ", flush=True)
         try:
             set_seeds()
-            if HAS_METIS:
+            if HAS_METIS and HAS_PYMETIS:
                 partitioner = MetisPartitioner(num_partitions=P, seed=SEED)
                 start = time.time()
                 assign = partitioner.fit(W_matrix)
-            else:
+            elif HAS_METIS:
                 start = time.time()
                 assign = MetisFallback.spectral_partition(W_matrix, P)
+            else:
+                raise ImportError("No METIS available")
             elapsed = time.time() - start
             m = compute_partition_metrics(W_matrix, assign, P)
-            results_P['METIS'] = {
+            method_label = 'METIS' if HAS_PYMETIS else 'Spectral'
+            results_P[method_label] = {
                 'edge_cut_ratio': m['edge_cut_ratio'], 'edge_cut': m['edge_cut'],
                 'partition_sizes': m['partition_sizes'], 'balance_std': m['balance_std'],
                 'time': elapsed
@@ -518,6 +529,7 @@ def generate_summary_plots(sweep_results, coords, W_matrix, all_assignments, bas
         'MECP-GAP': '#2196F3',
         'Greedy': '#FF9800',
         'METIS': '#4CAF50',
+        'Spectral': '#4CAF50',
         'PBPA': '#9C27B0',
         'Random': '#F44336'
     }
@@ -525,11 +537,12 @@ def generate_summary_plots(sweep_results, coords, W_matrix, all_assignments, bas
         'MECP-GAP': 'o',
         'Greedy': 's',
         'METIS': '^',
+        'Spectral': '^',
         'PBPA': 'D',
         'Random': 'v'
     }
     
-    for method in ['MECP-GAP', 'Greedy', 'METIS', 'PBPA', 'Random']:
+    for method in ['MECP-GAP', 'Greedy', 'METIS', 'Spectral', 'PBPA', 'Random']:
         if method not in methods:
             continue
         Ps = []
@@ -558,7 +571,7 @@ def generate_summary_plots(sweep_results, coords, W_matrix, all_assignments, bas
     # --- Plot 2: Balance Std vs P ---
     print("  Generating balance std vs P plot...")
     fig, ax = plt.subplots(figsize=(10, 6))
-    for method in ['MECP-GAP', 'Greedy', 'METIS', 'PBPA', 'Random']:
+    for method in ['MECP-GAP', 'Greedy', 'METIS', 'Spectral', 'PBPA', 'Random']:
         if method not in methods:
             continue
         Ps = []
@@ -587,7 +600,7 @@ def generate_summary_plots(sweep_results, coords, W_matrix, all_assignments, bas
     # --- Plot 3: Runtime vs P ---
     print("  Generating runtime vs P plot...")
     fig, ax = plt.subplots(figsize=(10, 6))
-    for method in ['MECP-GAP', 'Greedy', 'METIS', 'PBPA', 'Random']:
+    for method in ['MECP-GAP', 'Greedy', 'METIS', 'Spectral', 'PBPA', 'Random']:
         if method not in methods:
             continue
         Ps = []
@@ -683,7 +696,7 @@ def generate_summary_plots(sweep_results, coords, W_matrix, all_assignments, bas
     
     # --- Plot 6: Heatmap of edge cut ratios ---
     print("  Generating edge cut heatmap...")
-    all_methods_ordered = ['MECP-GAP', 'Greedy', 'METIS', 'PBPA', 'Random']
+    all_methods_ordered = ['MECP-GAP', 'Greedy', 'METIS', 'Spectral', 'PBPA', 'Random']
     avail_methods = [m for m in all_methods_ordered if any(m in sweep_results.get(P, {}) for P in PARTITION_COUNTS)]
     
     if avail_methods:
@@ -843,7 +856,7 @@ def main():
         p4 = sweep_results[DEFAULT_PARTITIONS]
         print(f"  {'Method':<18} {'Cut Ratio':>10} {'Balance Std':>12} {'Time':>8}")
         print(f"  {'-'*52}")
-        for method in ['MECP-GAP', 'Greedy', 'METIS', 'PBPA', 'Random']:
+        for method in ['MECP-GAP', 'Greedy', 'METIS', 'Spectral', 'PBPA', 'Random']:
             if method in p4:
                 r = p4[method]
                 print(f"  {method:<18} {r['edge_cut_ratio']*100:>9.2f}% {r['balance_std']:>12.2f} {r['time']:>7.2f}s")
