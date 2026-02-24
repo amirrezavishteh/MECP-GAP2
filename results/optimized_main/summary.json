@@ -1,0 +1,12 @@
+{
+  "num_nodes": 200,
+  "num_partitions": 4,
+  "final_loss": 1991.0072021484375,
+  "training_time": 2.098029851913452,
+  "partition_sizes": [
+    60,
+    52,
+    45,
+    43
+  ]
+}

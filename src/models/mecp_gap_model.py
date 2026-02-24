@@ -177,12 +177,137 @@ class GraphSAGELayer(nn.Module):
         return out
 
 
+class GraphAttentionLayer(nn.Module):
+    """
+    Graph Attention Network (GAT) layer with edge weight support.
+    
+    GAT learns attention scores for every edge, allowing the model to
+    'pay more attention' to heavily-weighted edges automatically.
+    Uses multi-head attention for learning multiple relationship types.
+    """
+    
+    def __init__(self, in_feats: int, out_feats: int,
+                 num_heads: int = 4,
+                 bias: bool = True,
+                 concat: bool = True,
+                 negative_slope: float = 0.2):
+        """
+        Args:
+            in_feats: Input feature dimension
+            out_feats: Output feature dimension per head
+            num_heads: Number of attention heads
+            bias: Whether to add bias
+            concat: If True, concatenate heads (out = num_heads * out_feats);
+                    if False, average heads (out = out_feats)
+            negative_slope: LeakyReLU negative slope for attention
+        """
+        super().__init__()
+        
+        self.in_feats = in_feats
+        self.out_feats = out_feats
+        self.num_heads = num_heads
+        self.concat = concat
+        self.negative_slope = negative_slope
+        
+        # Linear transformation for each head
+        self.W = nn.Parameter(torch.zeros(num_heads, in_feats, out_feats))
+        
+        # Attention parameters: a = [a_l || a_r] per head
+        self.a_l = nn.Parameter(torch.zeros(num_heads, out_feats, 1))
+        self.a_r = nn.Parameter(torch.zeros(num_heads, out_feats, 1))
+        
+        if bias and concat:
+            self.bias = nn.Parameter(torch.zeros(num_heads * out_feats))
+        elif bias:
+            self.bias = nn.Parameter(torch.zeros(out_feats))
+        else:
+            self.register_parameter('bias', None)
+        
+        self.reset_parameters()
+    
+    def reset_parameters(self):
+        gain = nn.init.calculate_gain('relu')
+        for h in range(self.num_heads):
+            nn.init.xavier_uniform_(self.W[h], gain=gain)
+            nn.init.xavier_uniform_(self.a_l[h], gain=gain)
+            nn.init.xavier_uniform_(self.a_r[h], gain=gain)
+    
+    def forward(self, x: torch.Tensor,
+                edge_index: torch.Tensor,
+                edge_weight: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """
+        Forward pass with multi-head attention and optional edge weighting.
+        
+        Args:
+            x: Node features (N, in_feats)
+            edge_index: Edge indices (2, E)
+            edge_weight: Edge weights (E,) - used to modulate attention
+            
+        Returns:
+            Updated node features (N, num_heads * out_feats) if concat else (N, out_feats)
+        """
+        N = x.size(0)
+        row, col = edge_index  # row=source, col=target
+        
+        # Transform features for each head: (num_heads, N, out_feats)
+        # x: (N, in_feats) -> Wh: (num_heads, N, out_feats)
+        Wh = torch.einsum('ni,hio->hno', x, self.W)
+        
+        # Compute attention scores per head
+        # e_ij = LeakyReLU(a_l^T * Wh_i + a_r^T * Wh_j)
+        # a_l scores for source: (num_heads, N, 1)
+        e_l = torch.bmm(Wh, self.a_l).squeeze(-1)  # (num_heads, N)
+        e_r = torch.bmm(Wh, self.a_r).squeeze(-1)  # (num_heads, N)
+        
+        # For each edge (row[e], col[e]):
+        # attention = e_l[row[e]] + e_r[col[e]]
+        e = e_l[:, row] + e_r[:, col]  # (num_heads, E)
+        e = F.leaky_relu(e, negative_slope=self.negative_slope)
+        
+        # Modulate attention with edge weights (the key GAT advantage for weighted graphs)
+        if edge_weight is not None:
+            # Scale attention by edge weight so heavy edges get more influence
+            e = e + torch.log(edge_weight.unsqueeze(0).clamp(min=1e-8))
+        
+        # Softmax normalization per target node
+        # We need to compute softmax grouped by col (target node)
+        e_max = torch.full((self.num_heads, N), float('-inf'), device=x.device)
+        e_max.scatter_reduce_(1, col.unsqueeze(0).expand(self.num_heads, -1), e, reduce='amax')
+        e_stable = e - e_max[:, col]
+        alpha = torch.exp(e_stable)
+        
+        # Sum of exp per target node
+        alpha_sum = torch.zeros(self.num_heads, N, device=x.device)
+        alpha_sum.scatter_add_(1, col.unsqueeze(0).expand(self.num_heads, -1), alpha)
+        alpha = alpha / (alpha_sum[:, col] + 1e-8)  # (num_heads, E)
+        
+        # Aggregate: for each target node, sum alpha * Wh[source]
+        # Wh[:, row]: (num_heads, E, out_feats)
+        weighted = alpha.unsqueeze(-1) * Wh[:, row]  # (num_heads, E, out_feats)
+        
+        out = torch.zeros(self.num_heads, N, self.out_feats, device=x.device)
+        col_expand = col.unsqueeze(0).unsqueeze(-1).expand(self.num_heads, -1, self.out_feats)
+        out.scatter_add_(1, col_expand, weighted)
+        
+        if self.concat:
+            # Concatenate heads: (N, num_heads * out_feats)
+            out = out.permute(1, 0, 2).contiguous().view(N, -1)
+        else:
+            # Average heads: (N, out_feats)
+            out = out.mean(dim=0)
+        
+        if self.bias is not None:
+            out = out + self.bias
+        
+        return out
+
+
 class MECP_GAP_Model(nn.Module):
     """
     The main MECP-GAP model architecture.
     
     Architecture (from paper Section IV.B):
-    1. Graph Embedding Module (2-layer GraphSAGE)
+    1. Graph Embedding Module (2-layer GraphSAGE or GAT)
         - Input: Node features (coordinates) -> 128-dim embedding
         - Uses weighted aggregation based on mobility matrix W
     
@@ -205,19 +330,21 @@ class MECP_GAP_Model(nn.Module):
                  num_layers: int = 2,
                  dropout: float = 0.0,
                  aggregator: str = 'mean',
-                 use_batch_norm: bool = False):
+                 use_batch_norm: bool = False,
+                 gnn_type: str = 'sage'):
         """
         Initialize MECP-GAP model.
         
         Args:
-            in_feats: Input feature dimension (usually 2 for coordinates)
+            in_feats: Input feature dimension (N for row-normalized weight features)
             hidden_feats: Hidden layer dimension (default 128 per paper)
             out_feats: Output embedding dimension (default 128 per paper)
             num_partitions: Number of partitions P (MEC servers)
             num_layers: Number of GNN layers (default 2 per paper)
             dropout: Dropout rate
-            aggregator: Type of aggregation ('mean', 'pool')
+            aggregator: Type of aggregation ('mean', 'pool') for GraphSAGE
             use_batch_norm: Whether to use batch normalization
+            gnn_type: 'sage' (GraphSAGE) or 'gat' (Graph Attention Network)
         """
         super().__init__()
         
@@ -227,36 +354,64 @@ class MECP_GAP_Model(nn.Module):
         self.num_partitions = num_partitions
         self.num_layers = num_layers
         self.dropout = dropout
+        self.gnn_type = gnn_type
         self.temperature = 1.0  # Temperature for softmax sharpening
         
         # ========================================
-        # 1. Graph Embedding Module (GraphSAGE)
+        # 1. Graph Embedding Module (GraphSAGE or GAT)
         # ========================================
         self.gnn_layers = nn.ModuleList()
         self.norms = nn.ModuleList() if use_batch_norm else None
         
-        # First layer: in_feats -> hidden_feats
-        self.gnn_layers.append(
-            GraphSAGELayer(in_feats, hidden_feats, aggregator=aggregator)
-        )
-        if use_batch_norm:
-            self.norms.append(nn.BatchNorm1d(hidden_feats))
-        
-        # Middle layers: hidden_feats -> hidden_feats
-        for _ in range(num_layers - 2):
+        if gnn_type == 'gat':
+            num_heads = 4
+            # First layer: in_feats -> hidden_feats (via num_heads heads, each producing hidden_feats//num_heads)
+            head_dim = hidden_feats // num_heads
             self.gnn_layers.append(
-                GraphSAGELayer(hidden_feats, hidden_feats, aggregator=aggregator)
+                GraphAttentionLayer(in_feats, head_dim, num_heads=num_heads, concat=True)
             )
             if use_batch_norm:
                 self.norms.append(nn.BatchNorm1d(hidden_feats))
-        
-        # Last layer: hidden_feats -> out_feats
-        if num_layers > 1:
+            
+            # Middle layers
+            for _ in range(num_layers - 2):
+                self.gnn_layers.append(
+                    GraphAttentionLayer(hidden_feats, head_dim, num_heads=num_heads, concat=True)
+                )
+                if use_batch_norm:
+                    self.norms.append(nn.BatchNorm1d(hidden_feats))
+            
+            # Last layer: hidden_feats -> out_feats (single head, average)
+            if num_layers > 1:
+                self.gnn_layers.append(
+                    GraphAttentionLayer(hidden_feats, out_feats, num_heads=1, concat=False)
+                )
+                if use_batch_norm:
+                    self.norms.append(nn.BatchNorm1d(out_feats))
+        else:
+            # GraphSAGE (default)
+            # First layer: in_feats -> hidden_feats
             self.gnn_layers.append(
-                GraphSAGELayer(hidden_feats, out_feats, aggregator=aggregator)
+                GraphSAGELayer(in_feats, hidden_feats, aggregator=aggregator)
             )
             if use_batch_norm:
-                self.norms.append(nn.BatchNorm1d(out_feats))
+                self.norms.append(nn.BatchNorm1d(hidden_feats))
+            
+            # Middle layers: hidden_feats -> hidden_feats
+            for _ in range(num_layers - 2):
+                self.gnn_layers.append(
+                    GraphSAGELayer(hidden_feats, hidden_feats, aggregator=aggregator)
+                )
+                if use_batch_norm:
+                    self.norms.append(nn.BatchNorm1d(hidden_feats))
+            
+            # Last layer: hidden_feats -> out_feats
+            if num_layers > 1:
+                self.gnn_layers.append(
+                    GraphSAGELayer(hidden_feats, out_feats, aggregator=aggregator)
+                )
+                if use_batch_norm:
+                    self.norms.append(nn.BatchNorm1d(out_feats))
         
         # ========================================
         # 2. Graph Partitioning Module (MLP)
@@ -299,20 +454,21 @@ class MECP_GAP_Model(nn.Module):
         h = x
         
         # Graph Embedding Module
+        activation_fn = F.elu if self.gnn_type == 'gat' else F.relu
         for i, gnn_layer in enumerate(self.gnn_layers):
             h = gnn_layer(h, edge_index, edge_weight)
             
             if self.norms is not None:
                 h = self.norms[i](h)
             
-            # ReLU activation for all but the last layer
+            # Activation for all but the last layer
             if i < len(self.gnn_layers) - 1:
-                h = F.relu(h)
+                h = activation_fn(h)
                 if self.dropout > 0:
                     h = F.dropout(h, p=self.dropout, training=self.training)
             else:
-                # Final GNN layer: apply ReLU then normalize
-                h = F.relu(h)
+                # Final GNN layer: apply activation then normalize
+                h = activation_fn(h)
                 h = F.normalize(h, p=2, dim=-1)
         
         embeddings = h
@@ -489,7 +645,7 @@ class MECP_GAP_Model_PyG(nn.Module):
         return probs
 
 
-def create_model(in_feats: int = 2,
+def create_model(in_feats: int = 200,
                  hidden_feats: int = 128,
                  num_partitions: int = 4,
                  backend: str = 'native') -> nn.Module:
@@ -497,7 +653,7 @@ def create_model(in_feats: int = 2,
     Factory function to create MECP-GAP model.
     
     Args:
-        in_feats: Input feature dimension
+        in_feats: Input feature dimension (N for row-normalized weight features)
         hidden_feats: Hidden dimension
         num_partitions: Number of partitions
         backend: 'native', 'dgl', or 'pyg'

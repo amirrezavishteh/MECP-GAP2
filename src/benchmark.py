@@ -62,12 +62,12 @@ class BenchmarkConfig:
     num_partitions: int = 4
     
     # MECP-GAP settings
-    gap_epochs: int = 200
+    gap_epochs: int = 500
     gap_lr: float = 0.01
     gap_hidden: int = 128
-    gap_alpha: float = 0.001
-    gap_beta: float = 10.0     # Higher beta for stronger balance enforcement
-    gap_gamma: float = -0.1
+    gap_alpha: float = -1.0    # Auto-compute alpha per paper (Eq. 9 normalization)
+    gap_beta: float = 1.0      # Balance loss weight (paper default)
+    gap_gamma: float = 0.0     # Entropy regularization (disabled per paper)
     
     # PBPA settings
     pbpa_episodes: int = 200
@@ -308,16 +308,17 @@ class MECPBenchmark:
             start_time = time.time()
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
             
-            # Prepare data
+            # Prepare data (uses row-normalized W as features, dim=N)
             features, edge_index, edge_weight, W_tensor = prepare_graph_data(
                 self.coords, self.W_matrix, device
             )
             coords_tensor = torch.tensor(self.coords, dtype=torch.float32, device=device)
             num_nodes = len(self.coords)
+            in_feats = features.shape[1]  # N for weight_row features
             
             # Initialize model
             model = MECP_GAP_Model(
-                in_feats=2,
+                in_feats=in_feats,
                 hidden_feats=self.config.gap_hidden,
                 out_feats=self.config.gap_hidden,
                 num_partitions=self.config.num_partitions,
@@ -325,15 +326,25 @@ class MECPBenchmark:
                 aggregator='mean'
             ).to(device)
             
-            # SSC-aware loss
+            # Auto-compute alpha for SSC to balance cut vs balance losses
+            if self.config.gap_alpha < 0:
+                total_weight = float(W_tensor.sum())
+                ssc_alpha = (num_nodes ** 2 / self.config.num_partitions) / (
+                    (1 - 1.0 / self.config.num_partitions) * total_weight + 1e-8
+                )
+            else:
+                ssc_alpha = self.config.gap_alpha
+            
+            # SSC-aware loss (normalize_cut=False to match auto-alpha scaling)
             criterion = MECP_Loss_SSC(
-                alpha=self.config.gap_alpha,
+                alpha=ssc_alpha,
                 beta=self.config.gap_beta,
                 gamma=self.config.gap_gamma,
                 delta=0.0005,
                 mode1_weight=0.3,
                 mode2_weight=0.3,
-                mode3_weight=0.4
+                mode3_weight=0.4,
+                normalize_cut=False
             )
             
             optimizer = torch.optim.Adam(model.parameters(), lr=self.config.gap_lr)

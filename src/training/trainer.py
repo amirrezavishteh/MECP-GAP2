@@ -42,12 +42,13 @@ class TrainingConfig:
     num_layers: int = 2  # Paper: 2-layer GNN
     dropout: float = 0.0
     aggregator: str = 'mean'
-    feature_type: str = 'weight_row'  # 'weight_row' (paper) or 'coords'
+    feature_type: str = 'hybrid'  # 'weight_row' (paper), 'coords', or 'hybrid' (weight_row + coords)
+    model_type: str = 'sage'  # 'sage' (GraphSAGE) or 'gat' (Graph Attention Network)
     
     # Loss hyperparameters (from paper)
     alpha: float = -1.0  # Edge cut weight (-1 = auto-compute to match paper's Eq. 9 normalization)
-    beta: float = 1.0  # Load balance weight
-    gamma: float = 0.0  # Entropy regularization (0 = disabled per paper)
+    beta: float = 2.0  # Load balance weight (higher = stricter balance)
+    gamma: float = -0.1  # Entropy regularization (-0.1 = encourages confident predictions)
     
     # Training hyperparameters
     learning_rate: float = 0.01
@@ -101,6 +102,14 @@ def prepare_graph_data(
         # Each node's feature = its connectivity pattern (dim = N)
         row_sums = W_matrix.sum(axis=1, keepdims=True) + 1e-8
         features_np = W_matrix / row_sums  # Row-normalized
+        features = torch.tensor(features_np, dtype=torch.float32, device=device)
+    elif feature_type == 'hybrid':
+        # Hybrid approach: concatenate row-normalized W + standardized coords
+        # Gives the model both connectivity AND geographic information
+        row_sums = W_matrix.sum(axis=1, keepdims=True) + 1e-8
+        weight_feats = W_matrix / row_sums  # Row-normalized (N, N)
+        coords_norm = (coords - coords.mean(axis=0)) / (coords.std(axis=0) + 1e-8)  # Standardized (N, 2)
+        features_np = np.concatenate([weight_feats, coords_norm], axis=1)  # (N, N+2)
         features = torch.tensor(features_np, dtype=torch.float32, device=device)
     else:
         # Fallback: use coordinates as features (dim = 2)
@@ -229,6 +238,7 @@ class MECPTrainer:
     
     def _build_model(self, in_feats: int):
         """Build model and optimizer with the correct input feature dimension."""
+        model_type = getattr(self.config, 'model_type', 'sage')
         self.model = MECP_GAP_Model(
             in_feats=in_feats,
             hidden_feats=self.config.hidden_feats,
@@ -236,7 +246,8 @@ class MECPTrainer:
             num_partitions=self.config.num_partitions,
             num_layers=self.config.num_layers,
             dropout=self.config.dropout,
-            aggregator=self.config.aggregator
+            aggregator=self.config.aggregator,
+            gnn_type=model_type
         ).to(self.device)
         
         # Initialize optimizer (Adam)
@@ -435,9 +446,10 @@ def train_mecp_gap(
     num_epochs: int = 200,
     learning_rate: float = 0.01,
     alpha: float = -1.0,
-    beta: float = 1.0,
-    gamma: float = 0.0,
-    feature_type: str = 'weight_row',
+    beta: float = 2.0,
+    gamma: float = -0.1,
+    feature_type: str = 'hybrid',
+    model_type: str = 'sage',
     verbose: bool = True,
     device: Optional[str] = None
 ) -> Tuple[np.ndarray, Dict[str, Any]]:
@@ -454,9 +466,10 @@ def train_mecp_gap(
         num_epochs: Number of training epochs
         learning_rate: Learning rate for optimizer
         alpha: Weight for edge cut loss (-1 = auto)
-        beta: Weight for balance loss
-        gamma: Weight for entropy regularization
-        feature_type: 'weight_row' (paper) or 'coords'
+        beta: Weight for balance loss (>1 prioritizes balance)
+        gamma: Weight for entropy regularization (-0.1 = confident predictions)
+        feature_type: 'weight_row', 'coords', or 'hybrid' (weights + coords)
+        model_type: 'sage' (GraphSAGE) or 'gat' (Graph Attention Network)
         verbose: Whether to print progress
         device: Target device ('cpu' or 'cuda')
         
@@ -476,6 +489,7 @@ def train_mecp_gap(
         beta=beta,
         gamma=gamma,
         feature_type=feature_type,
+        model_type=model_type,
         device=device
     )
     

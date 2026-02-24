@@ -33,6 +33,7 @@ from utils.visualization import (
     visualize_training_progress,
     print_partition_report
 )
+from utils.utils import kl_refinement
 
 
 def load_processed_data(data_dir: str):
@@ -130,9 +131,12 @@ def main():
                             help='Hidden layer dimension')
     model_group.add_argument('--num_layers', type=int, default=2,
                             help='Number of GNN layers')
-    model_group.add_argument('--feature_type', type=str, default='weight_row',
-                            choices=['weight_row', 'coords'],
-                            help='Node feature type: weight_row (paper, dim=N) or coords (dim=2)')
+    model_group.add_argument('--feature_type', type=str, default='hybrid',
+                            choices=['weight_row', 'coords', 'hybrid'],
+                            help='Node feature type: weight_row (dim=N), coords (dim=2), or hybrid (dim=N+2)')
+    model_group.add_argument('--model_type', type=str, default='sage',
+                            choices=['sage', 'gat'],
+                            help='GNN backbone: sage (GraphSAGE) or gat (Graph Attention Network)')
     
     # Training arguments
     train_group = parser.add_argument_group('Training')
@@ -142,9 +146,9 @@ def main():
                             help='Learning rate')
     train_group.add_argument('--alpha', type=float, default=-1.0,
                             help='Weight for edge cut loss (-1 = auto-compute per paper)')
-    train_group.add_argument('--beta', type=float, default=1.0,
-                            help='Weight for balance loss')
-    train_group.add_argument('--gamma', type=float, default=0.0,
+    train_group.add_argument('--beta', type=float, default=2.0,
+                            help='Weight for balance loss (>1 prioritizes balance)')
+    train_group.add_argument('--gamma', type=float, default=-0.1,
                             help='Weight for entropy regularization (0 = disabled; -0.1 = confident predictions)')
     
     # Output arguments
@@ -155,6 +159,8 @@ def main():
                              help='Skip visualization')
     output_group.add_argument('--save_plots', action='store_true',
                              help='Save plots to files')
+    output_group.add_argument('--no_refine', action='store_true',
+                             help='Skip KL post-processing refinement')
     
     args = parser.parse_args()
     
@@ -195,7 +201,8 @@ def main():
         alpha=args.alpha,
         beta=args.beta,
         gamma=args.gamma,
-        feature_type=getattr(args, 'feature_type', 'weight_row'),
+        feature_type=getattr(args, 'feature_type', 'hybrid'),
+        model_type=getattr(args, 'model_type', 'sage'),
         log_interval=50,
         checkpoint_dir=f"{args.save_dir}/checkpoints" if args.save_plots else None
     )
@@ -207,7 +214,19 @@ def main():
     print("\n[Step 3] Evaluating Results...")
     
     final_assignments = results['final_assignments']
-    print_partition_report(W_matrix, final_assignments, "MECP-GAP", num_partitions=args.num_partitions)
+    print_partition_report(W_matrix, final_assignments, "MECP-GAP (raw)", num_partitions=args.num_partitions)
+    
+    # Step 3.5: KL Post-Processing Refinement
+    if not args.no_refine:
+        print("\n[Step 3.5] KL Post-Processing Refinement...")
+        final_assignments = kl_refinement(
+            final_assignments, W_matrix,
+            num_partitions=args.num_partitions,
+            max_iterations=100,
+            balance_tolerance=0.1,
+            verbose=True
+        )
+        print_partition_report(W_matrix, final_assignments, "MECP-GAP (refined)", num_partitions=args.num_partitions)
     
     # Step 4: Visualize
     if not args.no_visualize:

@@ -34,6 +34,9 @@ from .utils import (
     add_noise_to_weights,
     save_graph_data,
     load_graph_data,
+    
+    # Post-processing
+    kl_refinement,
 )
 
 __all__ = [
@@ -62,4 +65,7 @@ __all__ = [
     'add_noise_to_weights',
     'save_graph_data',
     'load_graph_data',
+    
+    # Post-processing
+    'kl_refinement',
 ]

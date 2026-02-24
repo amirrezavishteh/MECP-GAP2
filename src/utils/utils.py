@@ -505,3 +505,155 @@ def load_graph_data(filepath: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray, 
         pass
     
     return coords, adj, W, metadata
+
+
+# =============================================================================
+# Part 3: Post-Processing Refinement (Kernighan-Lin style)
+# =============================================================================
+
+def kl_refinement(
+    assignments: np.ndarray,
+    W: np.ndarray,
+    num_partitions: int,
+    max_iterations: int = 100,
+    balance_tolerance: float = 0.1,
+    verbose: bool = False
+) -> np.ndarray:
+    """
+    Kernighan-Lin (KL) style greedy refinement of GNN partition assignments.
+    
+    After the GNN produces soft-probability assignments, this post-processing
+    step iteratively swaps boundary nodes between partitions to reduce the
+    total edge cut while respecting a balance constraint.
+    
+    Algorithm:
+    1. Identify boundary nodes (nodes with neighbors in a different partition).
+    2. For each boundary node, compute the 'gain' of moving it to each
+       neighboring partition: gain = (external edges to that partition) - 
+       (internal edges lost from current partition).
+    3. Execute the swap with the highest gain, subject to balance constraints.
+    4. Repeat until no beneficial swap exists.
+    
+    This is similar to what METIS does internally, and typically reduces
+    edge cut by 1-2% without any retraining.
+    
+    Args:
+        assignments: (N,) array of partition IDs (0 to P-1) from GNN
+        W: (N, N) mobility weight matrix
+        num_partitions: Number of partitions P
+        max_iterations: Maximum number of refinement passes
+        balance_tolerance: Maximum allowed deviation from ideal size as a
+                          fraction (e.g., 0.1 = 10% of ideal size)
+        verbose: Whether to print progress
+        
+    Returns:
+        refined_assignments: (N,) array of improved partition IDs
+    """
+    N = W.shape[0]
+    refined = assignments.copy()
+    ideal_size = N / num_partitions
+    max_deviation = balance_tolerance * ideal_size
+    
+    # Pre-compute partition sizes
+    partition_sizes = np.array([np.sum(refined == k) for k in range(num_partitions)])
+    
+    # Compute initial edge cut for tracking
+    if verbose:
+        init_cut = _compute_edge_cut_fast(refined, W)
+        print(f"KL Refinement: initial edge cut = {init_cut:.4f}")
+    
+    total_swaps = 0
+    for iteration in range(max_iterations):
+        improved = False
+        
+        # Identify boundary nodes: nodes that have at least one neighbor in a different partition
+        boundary_nodes = _get_boundary_nodes(refined, W, N)
+        
+        # Shuffle to avoid bias toward low-index nodes
+        np.random.shuffle(boundary_nodes)
+        
+        for node in boundary_nodes:
+            current_part = refined[node]
+            
+            # Compute gain for moving this node to each neighboring partition
+            best_gain = 0.0
+            best_target = -1
+            
+            # Get neighboring partitions for this node
+            neighbors = np.where(W[node] > 0)[0]
+            neighbor_parts = set(refined[neighbors]) - {current_part}
+            
+            for target_part in neighbor_parts:
+                # Check balance constraint: target partition should not become too large
+                # and source partition should not become too small
+                if partition_sizes[target_part] + 1 > ideal_size + max_deviation:
+                    continue
+                if partition_sizes[current_part] - 1 < ideal_size - max_deviation:
+                    continue
+                
+                # Compute gain = (weight from node to target_part) - (weight from node to current_part)
+                # Moving the node to target_part removes edges to current_part and adds edges to target_part
+                gain = 0.0
+                for nb in neighbors:
+                    w = W[node, nb]
+                    if refined[nb] == target_part:
+                        gain += w  # These edges become internal (no longer cut)
+                    elif refined[nb] == current_part:
+                        gain -= w  # These edges become cut
+                
+                if gain > best_gain:
+                    best_gain = gain
+                    best_target = target_part
+            
+            # Execute the best swap if beneficial
+            if best_target >= 0 and best_gain > 1e-10:
+                refined[node] = best_target
+                partition_sizes[current_part] -= 1
+                partition_sizes[best_target] += 1
+                improved = True
+                total_swaps += 1
+        
+        if not improved:
+            if verbose:
+                print(f"KL Refinement: converged after {iteration + 1} iterations, {total_swaps} total swaps")
+            break
+    else:
+        if verbose:
+            print(f"KL Refinement: reached max iterations ({max_iterations}), {total_swaps} total swaps")
+    
+    if verbose:
+        final_cut = _compute_edge_cut_fast(refined, W)
+        reduction = init_cut - final_cut
+        pct = (reduction / init_cut * 100) if init_cut > 0 else 0.0
+        print(f"KL Refinement: final edge cut = {final_cut:.4f} "
+              f"(reduction: {reduction:.4f}, {pct:.2f}%)")
+    
+    return refined
+
+
+def _get_boundary_nodes(assignments: np.ndarray, W: np.ndarray, N: int) -> np.ndarray:
+    """
+    Identify nodes that sit on partition boundaries.
+    
+    A boundary node has at least one neighbor in a different partition.
+    
+    Args:
+        assignments: (N,) partition IDs
+        W: (N, N) weight matrix
+        N: number of nodes
+        
+    Returns:
+        Array of boundary node indices
+    """
+    boundary = []
+    for i in range(N):
+        neighbors = np.where(W[i] > 0)[0]
+        if len(neighbors) > 0 and np.any(assignments[neighbors] != assignments[i]):
+            boundary.append(i)
+    return np.array(boundary, dtype=np.int64)
+
+
+def _compute_edge_cut_fast(assignments: np.ndarray, W: np.ndarray) -> float:
+    """Fast vectorized edge cut computation."""
+    diff = assignments[:, None] != assignments[None, :]
+    return float(np.sum(np.triu(W * diff)))

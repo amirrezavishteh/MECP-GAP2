@@ -49,13 +49,13 @@ from baselines.random_baseline import RandomPartitioner, run_random_multiple
 # Try optional imports
 try:
     from baselines.metis_baseline import MetisPartitioner, MetisFallback
-    # Test if pymetis actually works
+    # Check if pymetis is actually installed  
     try:
-        _tmp = MetisPartitioner(2)
+        import pymetis
         HAS_PYMETIS = True
-    except Exception:
+    except ImportError:
         HAS_PYMETIS = False
-    HAS_METIS = True  # MetisFallback always available
+    HAS_METIS = True  # MetisFallback (spectral) always available
 except ImportError:
     HAS_METIS = False
     HAS_PYMETIS = False
