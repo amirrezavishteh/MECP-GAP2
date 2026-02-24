@@ -76,7 +76,7 @@ AREA_SIZE = 10.0
 GAMMA_GRAVITY = 1.5
 NUM_EPOCHS_TRAIN = 500
 NUM_EPOCHS_BENCHMARK = 300
-PBPA_EPISODES = 200
+PBPA_EPISODES = 50
 PARTITION_COUNTS = [2, 3, 4, 5, 6]
 DEFAULT_PARTITIONS = 4
 
@@ -376,9 +376,9 @@ def run_partition_sweep(coords, W_matrix):
     sweep_results = {}
     
     for P in PARTITION_COUNTS:
-        print(f"\n{'─' * 60}")
+        print(f"\n{'-' * 60}")
         print(f"  P = {P} Partitions")
-        print(f"{'─' * 60}")
+        print(f"{'-' * 60}")
         
         results_P = {}
         

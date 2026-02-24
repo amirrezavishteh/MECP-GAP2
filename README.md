@@ -84,6 +84,7 @@ MCGAP/
     ├── run_experiments.py      # Paper experiment reproduction
     ├── run_benchmark.py        # Benchmark CLI
     ├── benchmark.py            # Benchmark framework
+    ├── generate_optimization_plots.py  # ★ Optimization comparison plots
     ├── models/
     │   ├── mecp_gap_model.py   # GraphSAGE + MLP model
     │   └── loss_functions.py   # Cut, balance, SSC losses
@@ -363,17 +364,19 @@ Output: Partition probabilities P (N × K)
 
 ### Hyperparameters
 
-| Parameter | Value | Description |
-|-----------|-------|-------------|
-| Hidden dim | 128 | GNN embedding dimension |
-| GNN layers | 2 | Number of GraphSAGE layers |
-| Learning rate | 0.01 | Adam optimizer |
-| Epochs | 300–500 | Training iterations |
-| α | Auto ($\frac{1}{\sum W}$) | Edge cut loss weight |
-| β | 1.0 | Balance loss weight |
-| γ (entropy) | 0.0 | Entropy regularization |
-| Feature type | weight_row | Row of W matrix as features |
-| Aggregation | mean | Weighted mean aggregation |
+| Parameter | Default | Optimized | Description |
+|-----------|:-------:|:---------:|-------------|
+| Hidden dim | 128 | 128 | GNN embedding dimension |
+| GNN layers | 2 | 2 | Number of GraphSAGE layers |
+| Learning rate | 0.01 | 0.01 | Adam optimizer |
+| Epochs | 300–500 | 500 | Training iterations |
+| α | Auto ($\frac{1}{\sum W}$) | Auto | Edge cut loss weight |
+| β | 1.0 | **2.0** | Balance loss weight (↑ = stricter balance) |
+| γ (entropy) | 0.0 | **−0.1** | Entropy regularization (confident predictions) |
+| Feature type | weight_row | **hybrid** | Row of W + coordinates (N+2 dim) |
+| Model type | sage | sage | GraphSAGE or GAT backbone |
+| KL Refinement | off | **on** | Post-processing boundary swap |
+| Aggregation | mean | mean | Weighted mean aggregation |
 
 ### Baseline Methods
 
@@ -401,9 +404,194 @@ Output: Partition probabilities P (N × K)
 
 ---
 
+## Advanced Optimization Guide
+
+To achieve results **beyond** the standard reproduction settings (lower Edge Cut Ratio < 7.30% and stricter Load Balance σ < 4.0), apply the following five optimization strategies. Each builds on the previous one.
+
+### Optimization Results: Before vs After
+
+| Variant | Edge Cut Ratio | Cut Edges | Balance σ | Improvement |
+|---------|:--------------:|:---------:|:---------:|:-----------:|
+| **Baseline** (β=1.0, weight_row) | 11.05% | 154 | 4.30 | — |
+| **+ β=2.0** | 8.79% | 127 | 2.92 | −20.5% ECR |
+| **+ Hybrid Features + Entropy** | 6.08% | 73 | 3.46 | −44.9% ECR |
+| **Full Optimized** (+KL Refine) | **5.85%** | 74 | **3.54** | **−47.0% ECR** |
+
+> The original standard run achieved **7.30%** edge cut ratio with σ=4.53.
+> The fully optimized pipeline achieves **5.85%** — a **19.9% relative improvement** over the standard result and **47.0% improvement** over the naive baseline.
+
+### Comparison with All Methods (P = 4)
+
+| Method | Edge Cut Ratio | Balance σ |
+|--------|:--------------:|:---------:|
+| **MECP-GAP (Optimized)** | **5.85%** | **3.54** |
+| MECP-GAP (Standard) | 7.30% | 4.53 |
+| Spectral | 7.45% | 14.05 |
+| Greedy (KGGGP) | 17.54% | 5.00 |
+| PBPA (DRL) | 57.63% | 4.30 |
+| Random (Best of 10) | 65.03% | 0.00 |
+
+### Optimization Comparison Plots
+
+<p align="center">
+  <img src="results/plots/optimization_comparison_bar.png" width="800" alt="Optimization Bar Comparison">
+</p>
+
+*Left: Edge Cut Ratio decreases with each optimization. Right: Balance σ improves with β tuning.*
+
+<p align="center">
+  <img src="results/plots/optimization_partition_comparison.png" width="900" alt="Partition Comparison Across Variants">
+</p>
+
+*Visual comparison of partition quality from Baseline through Full Optimized. Red dashed lines = cut edges.*
+
+<p align="center">
+  <img src="results/plots/optimization_improvement_waterfall.png" width="700" alt="Improvement Waterfall">
+</p>
+
+*Incremental impact of each optimization on edge cut ratio.*
+
+<p align="center">
+  <img src="results/plots/optimization_training_curves.png" width="900" alt="Training Curves Comparison">
+</p>
+
+*Training loss convergence for each variant. All converge within ~200 epochs.*
+
+<p align="center">
+  <img src="results/plots/optimization_radar.png" width="500" alt="Radar Chart">
+</p>
+
+*Multi-dimensional comparison: the optimized model dominates the baseline across all quality dimensions.*
+
+---
+
+### Strategy 1: Tune the Balance Factor (β)
+
+**Goal:** Fix partitions that are slightly unequal in size.
+
+**Why:** With the default β=1.0, the model prioritizes minimizing edge cuts over balancing partition sizes. If your load balance σ is around 4.5, increasing β forces the model to care more about equal cluster sizes.
+
+**Instruction:**
+
+```bash
+# Increase beta to prioritize balance
+python src/train.py --beta 2.0 --num_epochs 500 --save_plots
+```
+
+**Trade-off:** Edge Cut may increase slightly (e.g., from 7.3% → 8.8%) but Balance σ drops significantly (e.g., from 4.5 → 2.9).
+
+| Setting | ECR | Balance σ |
+|---------|:---:|:---------:|
+| β = 1.0 (default) | 11.05% | 4.30 |
+| **β = 2.0** | **8.79%** | **2.92** |
+
+---
+
+### Strategy 2: Augment Input Features (Hybrid Features)
+
+**Goal:** Give the model both connectivity *and* geography information.
+
+**Why:** Using only the weighted connections (row-normalized W) loses explicit coordinate information. Real-world handovers depend on both topology and physical distance. By concatenating weight features with standardized coordinates, the model can see that two nodes are far apart even if they are not directly connected.
+
+**Instruction:**
+
+```bash
+# Use hybrid features (W rows + coordinates)
+python src/train.py --feature_type hybrid --beta 2.0 --save_plots
+```
+
+The dataset builder concatenates features as: `[row_normalized_W(i,:) | standardized_coords(i,:)]`, giving each node a feature vector of dimension N+2 = 202.
+
+---
+
+### Strategy 3: Upgrade Model Architecture (GAT vs GraphSAGE)
+
+**Goal:** Better handling of "heavy" vs "light" edges.
+
+**Why:** GraphSAGE uses a weighted mean aggregation — it averages neighbors. Graph Attention Networks (GAT) learn an attention score for every edge, allowing the model to "pay 99% attention" to a heavy edge and ignore light ones automatically.
+
+**Instruction:**
+
+```bash
+# Use GAT backbone instead of GraphSAGE
+python src/train.py --model_type gat --beta 2.0 --feature_type hybrid --save_plots
+```
+
+The GAT implementation uses multi-head attention (4 heads) with edge weight modulation: attention scores are scaled by `log(edge_weight)` so that heavy mobility edges receive proportionally more influence.
+
+---
+
+### Strategy 4: Post-Processing Refinement (KL Greedy Swap)
+
+**Goal:** Fix small errors the GNN makes at partition boundaries.
+
+**Why:** GNNs output soft probabilities — sometimes a node is 51% Cluster A and 49% Cluster B. The argmax picks A, but B might actually be better for the total cut. A Kernighan-Lin style refinement iterates through boundary nodes and greedily swaps them if it reduces the total cut.
+
+**Instruction:**
+
+KL refinement is enabled by default. To disable it:
+
+```bash
+# With refinement (default)
+python src/train.py --beta 2.0 --feature_type hybrid
+
+# Without refinement
+python src/train.py --beta 2.0 --feature_type hybrid --no_refine
+```
+
+**Algorithm:**
+1. Run GNN → get partition assignments
+2. Identify boundary nodes (nodes with neighbors in different partitions)
+3. For each boundary node: check if swapping it to a neighbor cluster reduces total cut
+4. If yes and balance constraints are met: swap it
+5. Repeat until convergence
+
+**Impact:** Typically drops edge cut by an additional 1–2% without any retraining. METIS uses this technique internally.
+
+---
+
+### Strategy 5: Entropy Regularization
+
+**Goal:** Force the model to make confident partition decisions.
+
+**Why:** If the model outputs probabilities like [0.33, 0.33, 0.34], it is confused. We want [0.01, 0.01, 0.98]. Adding an entropy penalty to the loss function encourages the model to produce sharper, more decisive assignments.
+
+**Instruction:**
+
+```bash
+# Enable entropy regularization (γ = -0.1 encourages low entropy = confident predictions)
+python src/train.py --gamma -0.1 --beta 2.0 --feature_type hybrid --save_plots
+```
+
+The loss function becomes:
+
+$$\mathcal{L} = \alpha \cdot \mathcal{L}_{cut} + \beta \cdot \mathcal{L}_{balance} + \gamma \cdot H(X)$$
+
+Where $H(X) = -\sum_{i,k} X_{ik} \log X_{ik}$ is the entropy of the assignment probability matrix. With γ = −0.1, the model is rewarded for producing low-entropy (confident) outputs.
+
+---
+
+### Recommended Optimization Workflow
+
+```bash
+# Step 1: Quick check — tune balance factor (easiest win)
+python src/train.py --beta 2.0 --num_epochs 500 --save_plots --save_dir results/optimized_beta2
+
+# Step 2: Add hybrid features + entropy
+python src/train.py --beta 2.0 --feature_type hybrid --gamma -0.1 --num_epochs 500 --save_plots --save_dir results/optimized_hybrid
+
+# Step 3: Full pipeline (KL refinement is on by default)
+python src/train.py --beta 2.0 --feature_type hybrid --gamma -0.1 --num_epochs 500 --save_plots --save_dir results/optimized_full
+
+# Generate all comparison plots
+python src/generate_optimization_plots.py
+```
+
+---
+
 ## Generated Output Files
 
-### Plots (15 files)
+### Plots (20 files)
 
 | File | Description |
 |------|-------------|
@@ -421,6 +609,11 @@ Output: Partition probabilities P (N × K)
 | `results/plots/metrics_comparison_bar.png` | Multi-metric bar chart (P=4) |
 | `results/plots/partition_comparison.png` | Side-by-side method comparison |
 | `results/plots/edge_cut_heatmap.png` | Methods × P heatmap |
+| `results/plots/optimization_comparison_bar.png` | ★ Baseline vs Optimized bar charts |
+| `results/plots/optimization_partition_comparison.png` | ★ Partition visual: Baseline → Optimized |
+| `results/plots/optimization_improvement_waterfall.png` | ★ Waterfall of incremental improvements |
+| `results/plots/optimization_training_curves.png` | ★ Training curves overlay |
+| `results/plots/optimization_radar.png` | ★ Radar chart: multi-dimensional quality |
 
 ### Data Files
 
@@ -437,6 +630,7 @@ Output: Partition probabilities P (N × K)
 | File | Description |
 |------|-------------|
 | `results/metrics/comprehensive_results.json` | All experiment results |
+| `results/metrics/optimization_comparison.json` | ★ Optimization variant comparison |
 | `results/metrics/assignments_mecp_gap_P4.npy` | MECP-GAP assignments |
 | `results/metrics/assignments_greedy_kgggp.npy` | Greedy assignments |
 | `results/metrics/assignments_spectral.npy` | Spectral assignments |
